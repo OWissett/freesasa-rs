@@ -1,0 +1,3 @@
+[submodule "freesasa"]
+	path = freesasa
+	url = https://github.com/mittinatten/freesasa.git
