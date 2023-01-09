@@ -15,6 +15,7 @@ echo_green "Installing libraries..."
 sudo apt-get update
 sudo apt-get -y install git \
                         build-essential \
+                        pkg-config \
                         autoconf \
                         libc++-dev \
                         libc++abi-dev \
