@@ -1,8 +1,8 @@
-FROM ubuntu:18.04
+FROM mcr.microsoft.com/devcontainers/base:jammy
 
 LABEL maintainer="Oliver Wissett"
 LABEL version="1.0"
-LABEL description="FreeSASA docker image including Rust"
+LABEL description="FreeSASA dev container including Rust"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
