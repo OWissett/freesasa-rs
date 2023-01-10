@@ -45,6 +45,7 @@ RUN cp ./templates/zshrc.zsh-template zshrc
 RUN sed -i 's/plugins=(git)/plugins=(git zsh-syntax-highlighting)/g' ./zshrc \
     && wget https://aur.archlinux.org/cgit/aur.git/plain/0001-zshrc.patch\?h\=oh-my-zsh-git -O zshrc.patch && patch -p1 < zshrc.patch
 
+RUN echo 'source $HOME/.cargo/env' >> ./zshrc
 
 RUN cp ./zshrc /root/.zshrc
 RUN sudo ln /usr/share/oh-my-zsh/zshrc /etc/skel/.zshrc
@@ -59,6 +60,10 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 # Install syntax highlighting
 WORKDIR /home/sasa
+
+# Install rust tool chain
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+
 RUN git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 RUN sed -i 's/plugins=(git)/plugins=(git zsh-syntax-highlighting)/g' ~/.zshrc
 
@@ -73,3 +78,6 @@ RUN make install
 
 ARG DEBIAN_FRONTEND=dialog
 USER ${USERNAME}
+
+# Install rust tool chain
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y

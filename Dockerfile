@@ -21,6 +21,7 @@ RUN apt-get update && apt-get install -y \
     check
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
 
 RUN sudo adduser sasa sudo
 USER sasa
