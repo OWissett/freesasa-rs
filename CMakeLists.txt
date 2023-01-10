@@ -29,7 +29,6 @@ include_directories(${Boost_INCLUDE_DIRS})
 
 
 # Add the libraries
-
 add_library(xml2 STATIC IMPORTED)
 set_target_properties(xml2 PROPERTIES IMPORTED_LOCATION ${LIBXML2_LIBRARIES})
 
