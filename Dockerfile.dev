@@ -28,7 +28,9 @@ RUN apt-get update && apt-get install -y \
     vim \
     nano \
     sudo \
-    wget
+    wget \
+    libclang-dev \ 
+    clang
 
 # Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y

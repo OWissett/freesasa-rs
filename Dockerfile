@@ -18,7 +18,9 @@ RUN apt-get update && apt-get install -y \
     libjson-c-dev \
     libxml2-dev \
     libxml2-utils \
-    check
+    check \    
+    libclang-dev \ 
+    clang
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
