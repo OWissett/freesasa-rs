@@ -22,6 +22,9 @@ RUN apt-get update && apt-get install -y \
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 
+RUN sudo adduser sasa sudo
+USER sasa
+
 ARG DEBIAN_FRONTEND=dialog
 
 WORKDIR /home/sasa

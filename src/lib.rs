@@ -13,7 +13,6 @@ mod tests {
     fn freesasa_calculation() {
         unsafe {
             let pdb_file_path = "../data/5XH3.pdb";
-            let freesasa_res =
         }
     }
 }

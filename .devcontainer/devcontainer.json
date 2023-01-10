@@ -4,8 +4,13 @@
 	"name": "FreeSASA C/C++",
 	"dockerFile": "../Dockerfile.dev",
 	"extensions": [
-		"ms-vscode.cpptools"
-	]
+		"ms-vscode.cpptools",
+		"ms-azuretools.vscode-docker",
+		"rust-lang.rust-analyzer",
+		"ms-vscode.cmake-tools"
+	],
+	"remoteUser": "sasa",
+	"containerUser": "sasa"
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	// "features": {},

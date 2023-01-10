@@ -1,8 +1,12 @@
-FROM mcr.microsoft.com/devcontainers/base:jammy
+FROM ubuntu:18.04
 
 LABEL maintainer="Oliver Wissett"
 LABEL version="1.0"
 LABEL description="FreeSASA dev container including Rust"
+
+ARG USERNAME=sasa
+ARG USER_UID=1000
+ARG USER_GID=${USER_UID}
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -18,18 +22,54 @@ RUN apt-get update && apt-get install -y \
     libjson-c-dev \
     libxml2-dev \
     libxml2-utils \
-    check
+    check \
+    zsh \
+    curl \
+    vim \
+    nano \
+    sudo \
+    wget
 
+# Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
 
-ARG DEBIAN_FRONTEND=dialog
+# Install oh-my-zsh on root
+RUN bash -c "$(curl -fsSL https://raw.github.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
+RUN git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 
+RUN mv /root/.oh-my-zsh /usr/share/oh-my-zsh
+WORKDIR /usr/share/oh-my-zsh
+RUN cp ./templates/zshrc.zsh-template zshrc
+
+# Patch the zshrc file
+RUN sed -i 's/plugins=(git)/plugins=(git zsh-syntax-highlighting)/g' ./zshrc \
+    && wget https://aur.archlinux.org/cgit/aur.git/plain/0001-zshrc.patch\?h\=oh-my-zsh-git -O zshrc.patch && patch -p1 < zshrc.patch
+
+
+RUN cp ./zshrc /root/.zshrc
+RUN sudo ln /usr/share/oh-my-zsh/zshrc /etc/skel/.zshrc
+
+RUN groupadd --gid $USER_GID $USERNAME \
+    && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
+    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+    && chmod 0440 /etc/sudoers.d/$USERNAME \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME \
+    && chsh -s $(which zsh) ${USERNAME}
+
+
+# Install syntax highlighting
 WORKDIR /home/sasa
+RUN git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+RUN sed -i 's/plugins=(git)/plugins=(git zsh-syntax-highlighting)/g' ~/.zshrc
+
 RUN git clone https://github.com/mittinatten/freesasa.git
-WORKDIR /home/sasa/freesasa
+WORKDIR /home/${USERNAME}/freesasa
 RUN git submodule init
 RUN git submodule update
 RUN autoreconf -i
 RUN ./configure
 RUN make
 RUN make install
+
+ARG DEBIAN_FRONTEND=dialog
+USER ${USERNAME}
