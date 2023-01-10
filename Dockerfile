@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libxml2-utils \
     check
+ARG DEBIAN_FRONTEND=dialog
 
 WORKDIR /home/sasa
 RUN git clone https://github.com/mittinatten/freesasa.git
