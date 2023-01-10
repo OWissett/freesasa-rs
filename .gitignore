@@ -38,3 +38,7 @@ CMakeFiles/
 
 # VScode
 .vscode/
+
+# Added by cargo
+
+/target
