@@ -7,7 +7,9 @@
 		"ms-vscode.cpptools",
 		"ms-azuretools.vscode-docker",
 		"rust-lang.rust-analyzer",
-		"ms-vscode.cmake-tools"
+		"ms-vscode.cmake-tools",
+		"bungcip.better-toml",
+		"serayuzgur.crates"
 	],
 	"remoteUser": "sasa",
 	"containerUser": "sasa"

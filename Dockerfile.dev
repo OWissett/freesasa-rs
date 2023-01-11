@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y \
     nano \
     sudo \
     wget \
-    libclang-dev \ 
+    libclang-dev \
     clang
 
 # Install rust tool chain
@@ -74,7 +74,7 @@ WORKDIR /home/${USERNAME}/freesasa
 RUN git submodule init
 RUN git submodule update
 RUN autoreconf -i
-RUN ./configure
+RUN ./configure CFLAGS="-Ofast" --disable-json --disable-xml
 RUN make
 RUN make install
 
