@@ -11,3 +11,6 @@ bindgen = "0.63.0"
 [dependencies]
 log = "0.4.17"
 env_logger = "0.10.0"
+
+[profile.release]
+debug = true
