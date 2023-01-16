@@ -31,7 +31,8 @@ RUN apt-get update && apt-get install -y \
     wget \
     libclang-dev \
     clang \
-    linux-tools-generic
+    linux-tools-generic \
+    python3-pip
 
 # Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -85,3 +86,7 @@ USER ${USERNAME}
 
 # Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+# Install pre-commit
+RUN pip3 install pre-commit
+RUN echo 'export PATH=/home/sasa/.local/bin:$PATH' >> $HOME/.zshrc
