@@ -16,6 +16,8 @@ fn main() {
     // the resulting bindings.
     let bindings = bindgen::Builder::default()
         .header("wrapper.h")
+        .merge_extern_blocks(true)
+        .rustfmt_bindings(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
         .generate()
         .expect("Unable to generate bindings");
