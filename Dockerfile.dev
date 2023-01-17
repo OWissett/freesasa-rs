@@ -32,7 +32,8 @@ RUN apt-get update && apt-get install -y \
     libclang-dev \
     clang \
     linux-tools-generic \
-    python3-pip
+    python3-pip \
+    gnuplot
 
 # Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
