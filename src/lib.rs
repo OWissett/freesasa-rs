@@ -10,7 +10,7 @@ pub mod structure;
 #[allow(non_snake_case)]
 #[allow(unused)]
 #[allow(clippy::upper_case_acronyms)]
-mod freesasa {
+mod freesasa_ffi {
     // Macro Include the bindings into the scope.
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
@@ -19,16 +19,17 @@ use std::{ffi, os::raw};
 
 // To expose the raw FFI bindings, compile with `RUSTFLAGS="--cfg expose_raw_ffi"`
 #[cfg(expose_raw_ffi)]
-pub use freesasa;
+pub use freesasa_ffi;
 
 // Bring the needed freesasa functions into scope
-use freesasa::{
+use freesasa_ffi::{
     freesasa_set_verbosity, freesasa_verbosity_FREESASA_V_DEBUG,
     freesasa_verbosity_FREESASA_V_NORMAL,
     freesasa_verbosity_FREESASA_V_NOWARNINGS,
     freesasa_verbosity_FREESASA_V_SILENT,
 };
 
+#[derive(Debug, Clone, Copy)]
 pub enum FreesasaVerbosity {
     Debug,
     Normal,
@@ -109,7 +110,7 @@ mod tests {
 
     #[cfg(test)]
     mod raw_ffi_tests {
-        use crate::freesasa::{
+        use crate::freesasa_ffi::{
             fopen, freesasa_calc_structure, freesasa_classifier,
             freesasa_protor_classifier, freesasa_structure_from_pdb,
         };

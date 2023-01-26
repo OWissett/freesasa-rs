@@ -1,6 +1,6 @@
 use std::{ffi, fmt, os::raw, ptr};
 
-use crate::freesasa::{
+use crate::freesasa_ffi::{
     fclose, fopen, freesasa_calc_structure, freesasa_calc_tree,
     freesasa_classifier, freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_parameters, freesasa_protor_classifier,
@@ -50,6 +50,14 @@ pub struct FSStructure {
 impl FSStructure {
     /// Creates an empty FSStructure
     ///
+    /// FreeSASA C-API function: `freesasa_structure_new`
+    ///
+    /// Unlike the C-API function, you do not need to manually call
+    /// `freesasa_structure_free` on the returned structure. This is
+    /// handled by the Drop trait. However, you do need to manually
+    /// add atoms to the structure before attempting to calculate
+    /// the SASA.
+    ///
     /// ## Arguments
     /// * `name` - A string slice that provides the name of the pdb structure (default: "Unnamed")
     ///
@@ -66,6 +74,8 @@ impl FSStructure {
     }
 
     /// Creates an FSStructure from a path to a valid PDB file.
+    ///
+    /// FreeSASA C-API function: `freesasa_structure_from_pdb`
     ///
     /// ## Arguments
     ///
@@ -216,6 +226,10 @@ impl FSStructure {
         &self.name
     }
 
+    // ---------------- //
+    // Internal Methods //
+    // ---------------- //
+
     /// Returns the underlying pointer to the freesasa_structure C object.
     ///
     /// ### WARNING
@@ -254,7 +268,7 @@ impl fmt::Display for FSStructure {
 #[cfg(test)]
 mod tests {
 
-    use crate::freesasa::{
+    use crate::freesasa_ffi::{
         freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
 
