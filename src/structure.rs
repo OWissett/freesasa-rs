@@ -177,7 +177,7 @@ impl FSStructure {
     }
 
     /// Calculates the total SASA value of the structure using default parameters
-    pub fn calculate_sasa(&self) -> Result<FSResult, &str> {
+    pub fn calculate_sasa(&self) -> Result<FSResult, &'static str> {
         unsafe {
             FSResult::new(freesasa_calc_structure(
                 self.ptr,
@@ -216,6 +216,10 @@ impl FSStructure {
         &self.name
     }
 
+    pub fn is_null(&self) -> bool {
+        self.ptr.is_null()
+    }
+
     /// Returns the underlying pointer to the freesasa_structure C object.
     ///
     /// ### WARNING
@@ -224,7 +228,7 @@ impl FSStructure {
     /// If this pointer is deallocated early, you will get undefined behaviour since
     /// Drop will attempt to free the same memory (e.g. double free) when this FSStructure
     /// object is destroyed.
-    pub(crate) fn as_ptr(&self) -> *mut freesasa_structure {
+    fn as_ptr(&self) -> *mut freesasa_structure {
         self.ptr
     }
 }
