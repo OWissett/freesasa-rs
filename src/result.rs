@@ -120,7 +120,7 @@ impl FSResultTree {
     ) -> Result<FSResultTree, &'static str> {
         let name = str_to_c_string(structure.get_name())?.into_raw();
 
-        if structure.as_ptr().is_null() {
+        if structure.is_null() {
             return Err(
                 "Failed to create FSResultTree: structure.ptr was null!",
             );

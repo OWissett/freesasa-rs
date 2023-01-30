@@ -228,7 +228,7 @@ impl FSStructure {
     /// If this pointer is deallocated early, you will get undefined behaviour since
     /// Drop will attempt to free the same memory (e.g. double free) when this FSStructure
     /// object is destroyed.
-    fn as_ptr(&self) -> *mut freesasa_structure {
+    pub(crate) fn as_ptr(&self) -> *mut freesasa_structure {
         self.ptr
     }
 }
