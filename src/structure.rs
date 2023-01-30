@@ -258,8 +258,12 @@ impl fmt::Display for FSStructure {
 #[cfg(test)]
 mod tests {
 
-    use crate::freesasa::{
-        freesasa_structure_chain_labels, freesasa_structure_get_chains,
+    use crate::{
+        freesasa::{
+            freesasa_structure_chain_labels,
+            freesasa_structure_get_chains,
+        },
+        set_fs_verbosity,
     };
 
     use super::*;
@@ -279,6 +283,7 @@ mod tests {
 
     #[test]
     fn add_atom() {
+        set_fs_verbosity(crate::FreesasaVerbosity::Silent);
         let atoms = vec![
             // Atom, ResName, ResNum, Chain, X, Y, Z
             ("N", "ASN", "1", 'A', 10.287, 10.947, 12.500),
