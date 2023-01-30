@@ -4,8 +4,15 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    // Tell cargo to look for shared libraries in the directory
-    println!("cargo:rustc-link-search=/usr/local/lib");
+    if let Some(freesasa_location) = option_env!("FREESASA_STATIC_LIB")
+    {
+        println!(
+            "cargo:rustc-link-search=native={}",
+            freesasa_location
+        );
+    } else {
+        println!("cargo:rustc-link-search=native=/usr/local/lib");
+    }
 
     println!("cargo:rustc-link-lib=static=freesasa");
 
