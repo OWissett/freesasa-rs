@@ -1,6 +1,6 @@
 use std::{ffi, fmt, os::raw, ptr};
 
-use crate::freesasa::{
+use crate::freesasa_ffi::{
     fclose, fopen, freesasa_calc_structure, freesasa_calc_tree,
     freesasa_classifier, freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_parameters, freesasa_protor_classifier,
@@ -258,13 +258,10 @@ impl fmt::Display for FSStructure {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        freesasa::{
-            freesasa_structure_chain_labels,
-            freesasa_structure_get_chains,
-        },
-        set_fs_verbosity,
+    use crate::freesasa_ffi::{
+        freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
+    use crate::set_fs_verbosity;
 
     use super::*;
 
