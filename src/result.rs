@@ -3,7 +3,7 @@ use std::{collections::HashMap, ffi, fmt, ptr};
 // Bring the needed freesasa functions into scope
 use crate::{
     free_raw_c_string,
-    freesasa_ffi::{
+    fs_ffi::{
         freesasa_error_codes_FREESASA_SUCCESS,
         freesasa_error_codes_FREESASA_WARN, freesasa_node,
         freesasa_node_area, freesasa_node_children, freesasa_node_free,
