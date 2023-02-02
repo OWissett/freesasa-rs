@@ -274,6 +274,10 @@ impl Structure {
         &self.name
     }
 
+    pub fn is_null(&self) -> bool {
+        self.ptr.is_null()
+    }
+
     // ---------------- //
     // Internal Methods //
     // ---------------- //
@@ -324,7 +328,6 @@ mod tests {
         },
         set_fs_verbosity,
     };
-    use crate::set_fs_verbosity;
 
     use super::*;
 

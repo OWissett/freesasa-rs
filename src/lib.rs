@@ -45,14 +45,14 @@
 //! environment. The dockerfile can be found in the root of the repository.
 //!
 //! ## Example
-//! ```rust
-//! use rustsasa::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
+//! ```rust no_run
+//! use rust_sasa::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
 //!
 //! // Set the verbosity of the freesasa library
-//! set_fs_verbosity(FreesasaVerbosity::Normal);
+//! set_fs_verbosity(FreesasaVerbosity::Info);
 //!
 //! // Create a new structure from a PDB file
-//! let structure = Structure::from_pdb("tests/data/1ubq.pdb").unwrap();
+//! let structure = Structure::from_path("tests/data/1ubq.pdb", None).unwrap();
 //!
 //! // Calculate the SASA for the structure
 //! let result = structure.calculate_sasa().unwrap();

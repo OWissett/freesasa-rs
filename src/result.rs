@@ -177,19 +177,19 @@ impl SasaTree {
     ///
     ///  A little bit of time analysis can show this:
     ///
-    ///     Let m = be the number of chains
-    ///     Let n = be the average number of residues per chain
-    ///     Let N be the total number of residues
+    /// Let m = be the number of chains
+    /// Let n = be the average number of residues per chain
+    /// Let N be the total number of residues
     ///
-    ///     As such, N = m * n
+    /// As such, N = m * n
     ///
-    ///     Time: O(1 + 1 + m + 2 * (m * n))
-    ///           => O(2mn + m + 2)
-    ///           => O(2mn + m)
+    /// Time: O(1 + 1 + m + 2 * (m * n))
+    ///       => O(2mn + m + 2)
+    ///       => O(2mn + m)
     ///
-    ///     As m -> 1 and n -> 1, then O(2mn + m) -> O(3) ~ O(1)
-    ///     As m -> N and n -> 1, then O(2mn + m) -> O(3N) ~ O(N)
-    ///     If m = 1, then O(2n) and n = N, therefore, O(2N) ~ O(N)
+    /// As m -> 1 and n -> 1, then O(2mn + m) -> O(3) ~ O(1)
+    /// As m -> N and n -> 1, then O(2mn + m) -> O(3N) ~ O(N)
+    /// If m = 1, then O(2n) and n = N, therefore, O(2N) ~ O(N)
     ///
     ///
     /// Time: Best: O(1), Worst: O(N) where N is all residues in the tree
