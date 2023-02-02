@@ -21,14 +21,14 @@ fn main() {
 
     println!("cargo:rustc-link-lib=static=freesasa");
 
-    println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=./include/wrapper.h");
     println!("cargo:rerun-if-changed=build.rs");
 
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
     // the resulting bindings.
     let bindings = bindgen::Builder::default()
-        .header("wrapper.h")
+        .header("./include/wrapper.h")
         .merge_extern_blocks(true)
         .rustfmt_bindings(true)
         .parse_callbacks(Box::new(bindgen::CargoCallbacks))
