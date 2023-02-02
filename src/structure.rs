@@ -324,6 +324,7 @@ mod tests {
         },
         set_fs_verbosity,
     };
+    use crate::set_fs_verbosity;
 
     use super::*;
 
@@ -353,6 +354,7 @@ mod tests {
 
     #[test]
     fn add_atom() {
+        set_fs_verbosity(crate::FreesasaVerbosity::Silent);
         let atoms = vec![
             // Atom, ResName, ResNum, Chain, X, Y, Z
             ("N", "ASN", "1", 'A', 10.287, 10.947, 12.500),

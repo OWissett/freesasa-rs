@@ -96,18 +96,16 @@ use freesasa_ffi::{
 #[derive(Debug, Clone, Copy)]
 pub enum FreesasaVerbosity {
     Debug,
-    Normal,
-    NoWarnings,
+    Info,
+    Error,
     Silent,
 }
 
 pub fn set_fs_verbosity(verbosity: FreesasaVerbosity) {
     let verbosity = match verbosity {
         FreesasaVerbosity::Debug => freesasa_verbosity_FREESASA_V_DEBUG,
-        FreesasaVerbosity::Normal => {
-            freesasa_verbosity_FREESASA_V_NORMAL
-        }
-        FreesasaVerbosity::NoWarnings => {
+        FreesasaVerbosity::Info => freesasa_verbosity_FREESASA_V_NORMAL,
+        FreesasaVerbosity::Error => {
             freesasa_verbosity_FREESASA_V_NOWARNINGS
         }
         FreesasaVerbosity::Silent => {

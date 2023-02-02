@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"name": "rust_sasa",
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"stdexcept": "cpp",
+			"iostream": "cpp"
+		}
+	}
+}
