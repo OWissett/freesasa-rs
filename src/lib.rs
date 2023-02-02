@@ -45,14 +45,14 @@
 //! environment. The dockerfile can be found in the root of the repository.
 //!
 //! ## Example
-//! ```rust no_run
+//! ```rust
 //! use rust_sasa::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
 //!
 //! // Set the verbosity of the freesasa library
 //! set_fs_verbosity(FreesasaVerbosity::Info);
 //!
 //! // Create a new structure from a PDB file
-//! let structure = Structure::from_path("tests/data/1ubq.pdb", None).unwrap();
+//! let structure = Structure::from_path("./data/single_chain.pdb", None).unwrap();
 //!
 //! // Calculate the SASA for the structure
 //! let result = structure.calculate_sasa().unwrap();
@@ -62,12 +62,12 @@
 //! for (i, sasa) in atom_sasa.iter().enumerate() {
 //!    println!("Atom {}: {:.2}", i, sasa);
 //! }
-//!
-//!
 //! ```
 //!
 //! ## References
-//! \[1\] Simon Mitternacht (2016) FreeSASA: An open source C library for solvent accessible surface area calculations. F1000Research 5:189. (doi: [10.12688/f1000research.7931.1](https://f1000research.com/articles/5-189))
+//! \[1\] Simon Mitternacht (2016) FreeSASA: An open source C library for solvent accessible
+//! surface area calculations. F1000Research 5:189.
+//! (doi: [10.12688/f1000research.7931.1](https://f1000research.com/articles/5-189))
 #[macro_use]
 extern crate log;
 
