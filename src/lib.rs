@@ -1,25 +1,89 @@
-// Copyright 2023. Oliver Wissett, Matt Greenig, and Pietro Sormanni. All rights reserved.
+//! This crate aims to provides a safe interface to the
+//! [freesasa](https://freesasa.github.io/doxygen/index.html) C library, developed by
+//! [Simon Mittinatten](https://github.com/mittinatten) \[1\]. FreeSASA allows you to
+//! calculate the solvent accessible surface area (SASA) of a protein from its atomic
+//! coordinates. The library is written in C, and is available under the MIT license.
+//!
+//! Additionally, I am for this crate to provide additional functionality, such as
+//! providing improved dynamic structure building and to provide utilities for
+//! finding differences between multiple structures. I am also aiming for this
+//! library to be thread-safe, however, this is ultimately dependent on the
+//! underlying C library (which the author has stated 'should' be thread-safe, however
+//! this has not been tested).
+//!
+//! It is possible to expose the raw FFI bindings to the C library. This may be useful
+//! if you want to use the C library directly, or if you want to add your own C code.
+//!
+//! ## Installation
+//! The library is currently in a very early stage of development, and is not yet
+//! ready for use. However, if you would like to try it out, you can do so by
+//! adding the git repository as a submodule to your project, and then adding
+//! the following to your `Cargo.toml` file:
+//! ```toml
+//! [dependencies]
+//! rustsasa = { path = "path/to/rustsasa" }
+//! ```
+//!
+//! To build the library, you will need to have the `freesasa` C library installed as a
+//! static library. See the [freesasa repo](https://github.com/mittinatten/freesasa/) for
+//! details on how to do this.
+//!
+//! The build script will look for the `freesasa` static library in /usr/local/lib. However,
+//! if you have installed the library in a different location, you can set the `FREESASA_STATIC_LIB`
+//! environment variable to the directory containing the library. For example, if you have installed
+//! the library in `~/software/lib`, you can set the environment variable as follows:
+//! ```bash
+//! # Add the following to your .bashrc or .zshrc (or similar)
+//! export FREESASA_STATIC_LIB=~/software/lib
+//!
+//! # Or, set it for just this command
+//! FREESSASA_STATIC_LIB=~/software/lib cargo build
+//! ```
+//!
+//! Alternatively, you can use the dockerfile (`Dockerfile.dev`) to set up a dev-container. This
+//! dockerfile will install the `freesasa` library in `/usr/local/lib`, and set-up a Rust development
+//! environment. The dockerfile can be found in the root of the repository.
+//!
+//! ## Example
+//! ```rust
+//! use rustsasa::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
+//!
+//! // Set the verbosity of the freesasa library
+//! set_fs_verbosity(FreesasaVerbosity::Normal);
+//!
+//! // Create a new structure from a PDB file
+//! let structure = Structure::from_pdb("tests/data/1ubq.pdb").unwrap();
+//!
+//! // Calculate the SASA for the structure
+//! let result = structure.calculate_sasa().unwrap();
+//!
+//! // Print the SASA for each atom
+//! let atom_sasa = result.atom_sasa();
+//! for (i, sasa) in atom_sasa.iter().enumerate() {
+//!    println!("Atom {}: {:.2}", i, sasa);
+//! }
+//!
+//!
+//! ```
+//!
+//! ## References
+//! \[1\] Simon Mitternacht (2016) FreeSASA: An open source C library for solvent accessible surface area calculations. F1000Research 5:189. (doi: [10.12688/f1000research.7931.1](https://f1000research.com/articles/5-189))
+#[macro_use]
+extern crate log;
 
+// To expose the raw FFI bindings, compile with `RUSTFLAGS="--cfg expose_ffi"`
+#[cfg(expose_ffi)]
+pub mod freesasa_ffi;
+
+#[cfg(not(expose_ffi))]
+mod freesasa_ffi;
+
+pub mod classifier;
+pub mod node;
 pub mod result;
+pub mod selection;
 pub mod structure;
-
-// We include the bindings in its own module so that we don't expose the raw FFI bindings directly
-// when we publish the crate.
-#[allow(non_upper_case_globals)]
-#[allow(non_camel_case_types)]
-#[allow(non_snake_case)]
-#[allow(unused)]
-#[allow(clippy::upper_case_acronyms)]
-mod freesasa_ffi {
-    // Macro Include the bindings into the scope.
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-}
-
-use std::{ffi, os::raw};
-
-// To expose the raw FFI bindings, compile with `RUSTFLAGS="--cfg expose_raw_ffi"`
-#[cfg(expose_raw_ffi)]
-pub use freesasa_ffi;
+mod utils;
 
 // Bring the needed freesasa functions into scope
 use freesasa_ffi::{
@@ -29,7 +93,7 @@ use freesasa_ffi::{
     freesasa_verbosity_FREESASA_V_SILENT,
 };
 
-#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum FreesasaVerbosity {
     Debug,
     Info,
@@ -37,9 +101,6 @@ pub enum FreesasaVerbosity {
     Silent,
 }
 
-// ---------------- //
-// Public Functions //
-// ---------------- //
 pub fn set_fs_verbosity(verbosity: FreesasaVerbosity) {
     let verbosity = match verbosity {
         FreesasaVerbosity::Debug => freesasa_verbosity_FREESASA_V_DEBUG,
@@ -52,98 +113,9 @@ pub fn set_fs_verbosity(verbosity: FreesasaVerbosity) {
         }
     };
 
+    debug!("Setting freesasa verbosity to {:?}", verbosity);
+
     unsafe {
         freesasa_set_verbosity(verbosity);
-    }
-}
-
-// ------------------ //
-// Internal Functions //
-// ------------------ //
-pub(crate) fn char_to_c_char(
-    _char: char,
-) -> Result<raw::c_char, &'static str> {
-    let _char = _char as u32;
-    if _char <= 127 {
-        Ok(_char as raw::c_char)
-    } else {
-        Err("Failed to cast char to c_char: non-ASCII char")
-    }
-}
-
-pub(crate) fn str_to_c_string(
-    _str: &str,
-) -> Result<ffi::CString, &'static str> {
-    match ffi::CString::new(_str) {
-        Ok(_str) => Ok(_str),
-        Err(_) => Err("Failed to cast str to CString: NulError"),
-    }
-}
-
-// ------ //
-// Macros //
-// ------ //
-
-macro_rules! free_raw_c_string {
-    ( $( $x:expr ),* ) => {
-        {unsafe {
-            $(
-                if $x.is_null() {
-                    panic!();
-                }
-                let _ = std::ffi::CString::from_raw($x);
-            )*
-        }}
-    };
-}
-
-pub(crate) use free_raw_c_string;
-
-//---------//
-// Testing //
-//---------//
-
-#[cfg(test)]
-mod tests {
-
-    #[cfg(test)]
-    mod raw_ffi_tests {
-        use crate::freesasa_ffi::{
-            fopen, freesasa_calc_structure, freesasa_classifier,
-            freesasa_protor_classifier, freesasa_structure_from_pdb,
-        };
-        use std::{ffi, ptr};
-
-        #[test]
-        fn freesasa_calculation() {
-            unsafe {
-                // Define the file name
-                let pdb_filename =
-                    ffi::CString::new("./data/single_chain.pdb")
-                        .unwrap();
-
-                // Define the file mode
-                let modes = ffi::CString::new("r").unwrap();
-                // Create the default classifier
-                //
-
-                let classifier: *const freesasa_classifier =
-                    &freesasa_protor_classifier;
-
-                // Load file as C-style FILE pointer
-                let pdb_file =
-                    fopen(pdb_filename.as_ptr(), modes.as_ptr());
-
-                // Load structure
-                let structure = freesasa_structure_from_pdb(
-                    pdb_file, classifier, 0,
-                );
-
-                let fs_result =
-                    freesasa_calc_structure(structure, ptr::null());
-
-                println!("Total SASA: {}", *(*fs_result).sasa);
-            }
-        }
     }
 }

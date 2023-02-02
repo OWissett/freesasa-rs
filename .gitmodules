@@ -1,3 +1,6 @@
 [submodule "freesasa"]
 	path = freesasa
 	url = https://github.com/mittinatten/freesasa.git
+[submodule "pdbtbx"]
+	path = pdbtbx
+	url = git@github.com:OWissett/pdbtbx.git

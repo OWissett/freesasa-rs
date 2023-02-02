@@ -11,12 +11,18 @@ fn main() {
             freesasa_location
         );
     } else {
+        println!(
+            "cargo:warning=FREESASA_STATIC_LIB not set, assuming /usr/local/lib or ~/software. \
+            If this is not correct, please set FREESASA_STATIC_LIB to the directory \
+            containing libfreesasa.a"
+        );
         println!("cargo:rustc-link-search=native=/usr/local/lib");
     }
 
     println!("cargo:rustc-link-lib=static=freesasa");
 
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=build.rs");
 
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
