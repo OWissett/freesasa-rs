@@ -1,9 +1,8 @@
 use std::{collections::HashMap, ffi, fmt, ptr};
 
-// Bring the needed freesasa functions into scope
 use crate::{
-    free_raw_c_string,
-    fs_ffi::{
+    free_raw_c_strings,
+    freesasa_ffi::{
         freesasa_error_codes_FREESASA_SUCCESS,
         freesasa_error_codes_FREESASA_WARN, freesasa_node,
         freesasa_node_area, freesasa_node_children, freesasa_node_free,
@@ -12,26 +11,28 @@ use crate::{
         freesasa_nodetype_FREESASA_NODE_RESIDUE, freesasa_result,
         freesasa_result_free, freesasa_tree_init, freesasa_tree_join,
     },
-    str_to_c_string,
-    structure::FSStructure,
+    structure::Structure,
+    utils::str_to_c_string,
 };
 
 /// Rust wrapper for FreeSASA C-API freesasa_result object
 #[derive(Debug)]
-pub struct FSResult {
+pub struct SasaResult {
     /// Pointer to C-API object
     ptr: *mut freesasa_result,
 
-    // Total SASA valu
+    /// Total SASA value
     pub total: f64,
 
-    // Pointer to array
+    /// Pointer to underlying C-API SASA array
     sasa_ptr: *mut f64,
+
+    /// Number of atoms in the structure
     pub n_atoms: i32,
 }
 
-impl FSResult {
-    /// Creates a `FSResult` object from a raw `freesasa_result` pointer
+impl SasaResult {
+    /// Creates a [`SasaResult`] object from a raw `freesasa_result` pointer
     ///
     /// ### Safety
     ///
@@ -39,11 +40,11 @@ impl FSResult {
     /// If built with nightly compiler, the pointer's alignment is also checked.
     ///
     /// Do not use the pointer given after passing it to this function, since
-    /// FSResult is now responsible for the pointer.
+    /// [`SasaResult`] is now responsible for the pointer.
     ///
     pub unsafe fn new(
         ptr: *mut freesasa_result,
-    ) -> Result<FSResult, &'static str> {
+    ) -> Result<SasaResult, &'static str> {
         if ptr.is_null() {
             return Err("Null pointer was given to FSResult::new");
         }
@@ -65,7 +66,7 @@ impl FSResult {
             n_atoms = (*ptr).n_atoms;
         }
 
-        Ok(FSResult {
+        Ok(SasaResult {
             ptr,
             total,
             sasa_ptr,
@@ -74,7 +75,7 @@ impl FSResult {
     }
 
     /// Returns a vector of SASA values for each ATOM in the molecule
-    pub fn get_sasa_vec(&self) -> Vec<f64> {
+    pub fn atom_sasa(&self) -> Vec<f64> {
         let mut v: Vec<f64> = Vec::with_capacity(self.n_atoms as usize);
         for i in 0..self.n_atoms {
             unsafe {
@@ -85,7 +86,10 @@ impl FSResult {
     }
 }
 
-impl Drop for FSResult {
+impl Drop for SasaResult {
+    /// Releases the memory allocated for the underlying C-API object
+    /// when the object goes out of scope. This is called automatically
+    /// by the compiler - DO NOT CALL THIS FUNCTION YOURSELF.
     fn drop(&mut self) {
         unsafe {
             freesasa_result_free(self.ptr);
@@ -93,31 +97,32 @@ impl Drop for FSResult {
     }
 }
 
-impl fmt::Display for FSResult {
+impl fmt::Display for SasaResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.total)
     }
 }
 
 #[derive(Debug)]
-pub struct FSResultTree {
+pub struct SasaTree {
     root: *mut freesasa_node,
 }
 
-impl FSResultTree {
+impl SasaTree {
+    /// Creates a [`SasaTree`] object from a raw `freesasa_node` pointer
     pub fn new(
         root: *mut freesasa_node,
-    ) -> Result<FSResultTree, &'static str> {
+    ) -> Result<SasaTree, &'static str> {
         if root.is_null() {
             return Err("Failed to create FSResultTree, the root node was null!");
         }
-        Ok(FSResultTree { root })
+        Ok(SasaTree { root })
     }
 
     pub fn from_result(
-        result: &FSResult,
-        structure: &FSStructure,
-    ) -> Result<FSResultTree, &'static str> {
+        result: &SasaResult,
+        structure: &Structure,
+    ) -> Result<SasaTree, &'static str> {
         let name = str_to_c_string(structure.get_name())?.into_raw();
 
         if structure.as_ptr().is_null() {
@@ -137,72 +142,80 @@ impl FSResultTree {
         };
 
         // Return ownership of CString
-        free_raw_c_string![name];
+        free_raw_c_strings![name];
 
         if root.is_null() {
             return Err("Failed to create FSResultTree: freesasa_tree_init returned a null pointer!");
         }
 
-        Ok(FSResultTree { root })
+        Ok(SasaTree { root })
     }
 
     /// Returns the differences with this tree and another. Note, it is assumed that the other tree,
     /// is a subtree (as in all nodes contained in subtree and also present in this tree)
+    ///
+    /// ## For Developers
+    /// ### Psuedo code:
+    /// 1. Find the chains which contain differences, push a tuple of which each node pointer to
+    ///    to a vector.
+    /// 2. For each chain with a difference, calculate the pair-wise residue differences
+    /// 3. Store information about the residues with a change in values
+    ///
+    ///
+    /// NOTE: This function should probably be re-written using recursion, since we do the same
+    ///       for chains and residues, but since it is only two levels deep I didn't bother...
+    ///
+    /// ### Time Analysis:
+    /// By calculating the differences between chains first, we can identify which chains need to
+    /// be searched for the exact residues. This will likely increase the speed since proteins
+    /// have few chains (typlically less than 10, and I am being generous) but have many residues,
+    /// as such, we have reduced the search space. One thing to note is that the chain
+    /// in which the deletion has occurred in will be always be searched on a residue level. This
+    /// is because deletion of residues will change the SASA. There are possibilities: 1, the
+    /// deleted region was surface exposed; or 2, the deleted region was buried. Both possibilities
+    /// will cause a change in SASA area for that chain.
+    ///
+    ///  A little bit of time analysis can show this:
+    ///
+    ///     Let m = be the number of chains
+    ///     Let n = be the average number of residues per chain
+    ///     Let N be the total number of residues
+    ///
+    ///     As such, N = m * n
+    ///
+    ///     Time: O(1 + 1 + m + 2 * (m * n))
+    ///           => O(2mn + m + 2)
+    ///           => O(2mn + m)
+    ///
+    ///     As m -> 1 and n -> 1, then O(2mn + m) -> O(3) ~ O(1)
+    ///     As m -> N and n -> 1, then O(2mn + m) -> O(3N) ~ O(N)
+    ///     If m = 1, then O(2n) and n = N, therefore, O(2N) ~ O(N)
+    ///
+    ///
+    /// Time: Best: O(1), Worst: O(N) where N is all residues in the tree
+    ///
+    /// Space: O(N)
+    ///
     pub fn get_subtree_difference(
         &self,
-        subtree: &FSResultTree,
+        subtree: &SasaTree,
     ) -> Vec<String> {
-        // Psuedo code:
-        // 1. Find the chains which contain differences, push a tuple of which each node pointer to
-        //    to a vector.
-        // 2. For each chain with a difference, calculate the pair-wise residue differences
-        // 3. Store information about the residues with a change in values
-        //
-        //
-        // NOTE: This function should probably be re-written using recursion, since we do the same
-        //       for chains and residues, but since it is only two levels deep I didn't bother...
-
-        // By calculating the differences between chains first, we can identify which chains need to
-        // be searched for the exact residues. This will likely increase the speed since proteins
-        // have few chains (typlically less than 10, and I am being generous) but have many residues,
-        // as such, we have reduced the search space. One thing to note is that the chain
-        // in which the deletion has occurred in will be always be searched on a residue level. This
-        // is because deletion of residues will change the SASA. There are possibilities: 1, the
-        // deleted region was surface exposed; or 2, the deleted region was buried. Both possibilities
-        // will cause a change in SASA area for that chain.
-        //
-        //  A little bit of time analysis can show this:
-        //
-        //  Time: O(1 + 1 + m + 2 * (m * n))
-        //        => O(2mn + m + 2)
-        //        => O(2mn + m)
-        //
-        //  As m -> 1 and n -> 1, then O(2mn + m) -> O(3) ~ O(1)    This is not going to happen though
-        //  As m -> N and n -> 1, then O(2mn + m) -> O(3N) ~ O(N)
-        //  If m = 1, then O(2n) and n = N, therefore, O(2N) ~ O(N)
-        //
-        //  The amortized time complexity is O(N), however, in practice it is faster
-
-        // Get the first chains as a HashMap with the pointers and areas.
-        // Time: O(1)
-        let chains = FSResultTree::get_node(
+        let chains = SasaTree::get_node(
             self.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
 
         // Get the second tree's chains
         // Time: O(1)
-        let subtree_chains = FSResultTree::get_node(
+        let subtree_chains = SasaTree::get_node(
             subtree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
 
         // Find the chains which have different SASA values
         // Time: O(m) where m is the number of chains
-        let chain_diffs = FSResultTree::nodes_with_differences(
-            chains,
-            subtree_chains,
-        );
+        let chain_diffs =
+            SasaTree::siblings_with_differences(chains, subtree_chains);
 
         // Find the residues which have differences
         let mut residue_diffs: HashMap<
@@ -216,25 +229,25 @@ impl FSResultTree {
         //                  This is realistically faster than computing all residues which is O(N),
         //                  where N is the total number of residues in the residues in the structure
         for chain in chain_diffs {
-            let name = FSResultTree::get_node_name(chain.0);
-            let res_node = FSResultTree::get_node(
+            let name = SasaTree::get_node_name(chain.0);
+            let res_node = SasaTree::get_node(
                 chain.0,
                 freesasa_nodetype_FREESASA_NODE_RESIDUE,
             );
-            let subtree_res_node = FSResultTree::get_node(
+            let subtree_res_node = SasaTree::get_node(
                 chain.1,
                 freesasa_nodetype_FREESASA_NODE_RESIDUE,
             );
             residue_diffs.insert(
                 name,
-                FSResultTree::nodes_with_differences(
+                SasaTree::siblings_with_differences(
                     res_node,
                     subtree_res_node,
                 ),
             );
         }
 
-        // Convert the HashMap to vector following FragDB UID residue naming scheme
+        // Convert the HashMap to vector following FragDB RUID naming scheme
         // (maybe move this to its own function)
         //
         // Time: O(m * n) - Same as above...
@@ -243,7 +256,7 @@ impl FSResultTree {
             let i = chain.1.iter().map(|res| -> String {
                 chain.0.clone()
                     + ":"
-                    + FSResultTree::get_node_name(res.0).as_str()
+                    + SasaTree::get_node_name(res.0).as_str()
             });
             output_vector.extend(i);
         }
@@ -251,20 +264,41 @@ impl FSResultTree {
         output_vector
     }
 
-    fn nodes_with_differences(
+    /// Returns the pairs of nodes which have different SASA values.
+    ///
+    /// The subtree_node must be a valid subtree of the node, meaning that all nodes in subtree_node
+    /// must also be present in node, but not necessarily the other way around.
+    ///
+    ///
+    /// This function only operates on the siblings of the nodes, and does not compare children.
+    ///
+    ///
+    /// ## Arguments
+    /// - `node`: The first node to compare
+    /// - `subtree_node`: The second node to compare
+    ///
+    /// ## Returns
+    /// A vector of tuples of pointers to the nodes which have different SASA values
+    ///
+    /// ## Time Complexity
+    /// O(n) where n is the number of nodes in the tree
+    ///
+    /// ## Space Complexity
+    /// O(n) where n is the number of nodes in the tree
+    fn siblings_with_differences(
         node: *mut freesasa_node,
         subtree_node: *mut freesasa_node,
     ) -> Vec<(*mut freesasa_node, *mut freesasa_node)> {
-        let siblings = FSResultTree::get_siblings_as_vector(node, None);
+        let siblings = SasaTree::get_siblings_as_vector(node, None);
         let subtree_siblings =
-            FSResultTree::get_siblings_as_hashmap(subtree_node);
+            SasaTree::get_siblings_as_hashmap(subtree_node);
 
         let mut v = Vec::new();
 
         // Find the chains which have different SASA values
         for sibling in siblings {
-            let name = FSResultTree::get_node_name(sibling);
-            let area = FSResultTree::get_node_area(sibling);
+            let name = SasaTree::get_node_name(sibling);
+            let area = SasaTree::get_node_area(sibling);
 
             match subtree_siblings.get(&name) {
                 Some((subtree_node, subtree_area)) => {
@@ -282,11 +316,11 @@ impl FSResultTree {
     /// Joins the given tree with the current tree
     ///
     /// ## Arguments
-    /// * `other_tree` - The tree to join. Note that the passed in tree's ownership
+    /// - `other_tree` - The tree to join. Note that the passed in tree's ownership
     ///             moves to this function, and then memory is deallocated.
     pub fn join(
         &self,
-        mut other_tree: FSResultTree,
+        mut other_tree: SasaTree,
     ) -> Result<(), &'static str> {
         let code = unsafe {
             freesasa_tree_join(
@@ -314,8 +348,8 @@ impl FSResultTree {
     /// Time: O(n) where n is the depth of the node type decendent.
     ///
     /// ## Arguments
-    /// * `node` - The node to decend from
-    /// * `node_type` - The type of node to return at
+    /// - `node` - The node to decend from
+    /// - `node_type` - The type of node to return at
     ///
     /// ## Returns
     /// A mutable pointer to the matching node or a null pointer if no match was found.
@@ -335,7 +369,7 @@ impl FSResultTree {
             return node;
         }
 
-        FSResultTree::get_node(node, node_type) // Then we go deeper!!!
+        SasaTree::get_node(node, node_type) // Then we go deeper!!!
     }
 
     /// Makes a HashMap with the node names as the keys, and the values tuples of node pointer
@@ -348,10 +382,10 @@ impl FSResultTree {
         let mut node = node;
         let mut h = HashMap::<String, (*mut freesasa_node, f64)>::new();
         while !node.is_null() {
-            let area = FSResultTree::get_node_area(node);
-            let name = FSResultTree::get_node_name(node);
+            let area = SasaTree::get_node_area(node);
+            let name = SasaTree::get_node_name(node);
             if h.insert(name, (node, area)).is_some() {
-                println!("WARNING: It appears that multiple siblings have the same name: {}", FSResultTree::get_node_name(node));
+                println!("WARNING: It appears that multiple siblings have the same name: {}", SasaTree::get_node_name(node));
             }
             node = unsafe { freesasa_node_next(node) };
         }
@@ -363,9 +397,9 @@ impl FSResultTree {
     /// Time: O(n) where n is the number of sibling nodes
     ///
     /// ## Arguments
-    /// * `node` - The node to find all of the siblings of. If the node is not the first in the
+    /// - `node` - The node to find all of the siblings of. If the node is not the first in the
     ///            sequence, only nodes after will be added.
-    /// * `capacity` - Optionally can provide a capacity which will be used to pre-allocate the
+    /// - `capacity` - Optionally can provide a capacity which will be used to pre-allocate the
     ///                vector.
     fn get_siblings_as_vector(
         node: *mut freesasa_node,
@@ -400,10 +434,13 @@ impl FSResultTree {
     }
 }
 
-impl Drop for FSResultTree {
+impl Drop for SasaTree {
     fn drop(&mut self) {
         unsafe {
             if self.root.is_null() {
+                trace!(
+                    "SasaTree::drop() - root is null, nothing to free"
+                );
                 return; // Do need to free if null, tree probably was moved
             }
             freesasa_node_free(self.root);

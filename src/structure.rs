@@ -1,26 +1,19 @@
+//!
+
 use std::{ffi, fmt, os::raw, ptr};
 
-use crate::fs_ffi::{
+use crate::classifier::DEFAULT_CLASSIFIER;
+use crate::free_raw_c_strings;
+use crate::freesasa_ffi::{
     fclose, fopen, freesasa_calc_structure, freesasa_calc_tree,
     freesasa_classifier, freesasa_error_codes_FREESASA_SUCCESS,
-    freesasa_parameters, freesasa_protor_classifier,
-    freesasa_structure, freesasa_structure_add_atom,
-    freesasa_structure_free, freesasa_structure_from_pdb,
-    freesasa_structure_new,
+    freesasa_parameters, freesasa_structure,
+    freesasa_structure_add_atom, freesasa_structure_free,
+    freesasa_structure_from_pdb, freesasa_structure_new,
 };
-use crate::{char_to_c_char, free_raw_c_string, str_to_c_string};
+use crate::utils::{char_to_c_char, str_to_c_string};
 
-use crate::result::{FSResult, FSResultTree};
-
-/// Very similar to the macro definition for the default classifier found in the
-/// freesasa.h file:
-///
-/// ```C++
-/// #define freesasa_default_classifier freesasa_protor_classifier
-/// ```
-///
-static DEFAULT_CLASSIFIER: &freesasa_classifier =
-    unsafe { &freesasa_protor_classifier };
+use crate::result::{SasaResult, SasaTree};
 
 /// Set the default behaviour for PDB loading
 const DEFAULT_STRUCTURE_OPTIONS: raw::c_int = 0 as raw::c_int;
@@ -36,7 +29,7 @@ const DEFAULT_CALCULATION_PARAMETERS: *const freesasa_parameters =
 /// to then add atoms to it using `.add_atoms()` before attempting
 /// to calculate the SASA.
 #[derive(Debug)]
-pub struct FSStructure {
+pub struct Structure {
     /// Raw pointer to the C-API freesasa_structure object.
     ///
     /// ### WARNING
@@ -47,7 +40,7 @@ pub struct FSStructure {
     name: String, // Note that this string must be C compatible, e.g., ASCII only
 }
 
-impl FSStructure {
+impl Structure {
     /// Creates an empty FSStructure
     ///
     /// FreeSASA C-API function: `freesasa_structure_new`
@@ -61,16 +54,19 @@ impl FSStructure {
     /// ## Arguments
     /// * `name` - A string slice that provides the name of the pdb structure (default: "Unnamed")
     ///
+    /// ## Errors
+    /// * If [`freesasa_structure_new`] returns a null pointer - E.g., unable to allocate memory
+    ///
     pub fn new_empty(
         name: Option<&str>,
-    ) -> Result<FSStructure, &'static str> {
+    ) -> Result<Structure, &'static str> {
         let ptr = unsafe { freesasa_structure_new() };
         if ptr.is_null() {
             return Err("Failed to create empty FSStructure: freesasa_structure_new returned a null pointer!");
         }
 
         let name = name.unwrap_or("Unnamed").to_string();
-        Ok(FSStructure { ptr, name })
+        Ok(Structure { ptr, name })
     }
 
     /// Creates an FSStructure from a path to a valid PDB file.
@@ -89,7 +85,7 @@ impl FSStructure {
     pub fn from_path(
         pdb_path: &str,
         options: Option<raw::c_int>,
-    ) -> Result<FSStructure, &'static str> {
+    ) -> Result<Structure, &'static str> {
         let pdb_name = *pdb_path
             .split('/')
             .collect::<Vec<&str>>()
@@ -112,7 +108,7 @@ impl FSStructure {
         let file = unsafe { fopen(pdb_path, modes) };
 
         // Return ownership of pdb_path and modes to Rust
-        free_raw_c_string!(pdb_path, modes);
+        free_raw_c_strings!(pdb_path, modes);
 
         if file.is_null() {
             return Err(
@@ -140,10 +136,64 @@ impl FSStructure {
             );
         }
 
-        Ok(FSStructure {
+        Ok(Structure {
             ptr: structure,
             name: String::from(pdb_name),
         })
+    }
+
+    pub fn from_pdbtbx(
+        pdbtbx_structure: &pdbtbx::PDB,
+    ) -> Result<Self, &'static str> {
+        let name = pdbtbx_structure
+            .identifier
+            .clone()
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let fs_structure = Self::new_empty(Some(name.as_str()))?;
+
+        // Build the structure
+        for chain in pdbtbx_structure.chains() {
+            for residue in chain.residues() {
+                for atom in residue.atoms() {
+                    let atom_name = atom.name();
+                    let res_name = residue.name().unwrap_or("UNK");
+                    let res_number = {
+                        let (num, ic) = residue.id();
+                        num.to_string() + ic.unwrap_or("")
+                    };
+
+                    let pos = atom.pos();
+
+                    let chain_id = {
+                        let cid = chain.id();
+                        if cid.len() != 1 {
+                            error!("Found {} as chain ID, it must be a single ASCII character!", chain.id());
+                            return Err("Chain IDs must be single characters! Check logs.");
+                        }
+                        cid.chars().next().unwrap()
+                    };
+
+                    if fs_structure
+                        .add_atom(
+                            atom_name,
+                            res_name,
+                            res_number.as_str(),
+                            chain_id,
+                            pos,
+                        )
+                        .is_err()
+                    {
+                        warn!(
+                            "Unable to add atom {} to {}",
+                            atom_name, &name
+                        );
+                    }
+                }
+            }
+        }
+
+        Ok(fs_structure)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -153,9 +203,7 @@ impl FSStructure {
         res_name: &str,
         res_number: &str,
         chain_label: char,
-        x: f64,
-        y: f64,
-        z: f64,
+        (x, y, z): (f64, f64, f64),
     ) -> Result<(), &'static str> {
         // Convert the types to C-style types
         let atom_name = str_to_c_string(atom_name)?.into_raw();
@@ -177,7 +225,7 @@ impl FSStructure {
         };
 
         // Retake ownership of CStrings - allowing for proper deallocation of memory
-        free_raw_c_string![atom_name, res_name, res_number];
+        free_raw_c_strings![atom_name, res_name, res_number];
 
         if res_code == freesasa_error_codes_FREESASA_SUCCESS {
             Ok(())
@@ -187,9 +235,9 @@ impl FSStructure {
     }
 
     /// Calculates the total SASA value of the structure using default parameters
-    pub fn calculate_sasa(&self) -> Result<FSResult, &str> {
+    pub fn calculate_sasa(&self) -> Result<SasaResult, &str> {
         unsafe {
-            FSResult::new(freesasa_calc_structure(
+            SasaResult::new(freesasa_calc_structure(
                 self.ptr,
                 DEFAULT_CALCULATION_PARAMETERS,
             ))
@@ -199,7 +247,7 @@ impl FSStructure {
     /// Calculates the SASA value as a tree using the default parameters
     pub fn calculate_sasa_tree(
         &self,
-    ) -> Result<FSResultTree, &'static str> {
+    ) -> Result<SasaTree, &'static str> {
         let name = str_to_c_string(&self.name)?.into_raw();
         let root = unsafe {
             freesasa_calc_tree(
@@ -218,7 +266,7 @@ impl FSStructure {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        FSResultTree::new(root)
+        SasaTree::new(root)
     }
 
     /// Returns a string slice to the name of the structure
@@ -247,7 +295,7 @@ impl FSStructure {
 // Trait Implementations //
 // --------------------- //
 
-impl Drop for FSStructure {
+impl Drop for Structure {
     fn drop(&mut self) {
         unsafe {
             freesasa_structure_free(self.ptr);
@@ -255,7 +303,7 @@ impl Drop for FSStructure {
     }
 }
 
-impl fmt::Display for FSStructure {
+impl fmt::Display for Structure {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "(pdb_name: {})", self.name)
     }
@@ -269,7 +317,8 @@ impl fmt::Display for FSStructure {
 mod tests {
 
     use crate::{
-        fs_ffi::{
+        classifier::DEFAULT_CLASSIFIER,
+        freesasa_ffi::{
             freesasa_structure_chain_labels,
             freesasa_structure_get_chains,
         },
@@ -281,13 +330,24 @@ mod tests {
     #[test]
     fn from_path() {
         let _ =
-            FSStructure::from_path("./data/single_chain.pdb", Some(0))
+            Structure::from_path("./data/single_chain.pdb", Some(0))
                 .unwrap();
     }
 
     #[test]
+    fn from_pdbtbx() {
+        let (pdb, _e) = pdbtbx::open(
+            "./data/single_chain.pdb",
+            pdbtbx::StrictnessLevel::Loose,
+        )
+        .unwrap();
+
+        let _ = Structure::from_pdbtbx(&pdb).unwrap();
+    }
+
+    #[test]
     fn new_empty() {
-        let hello = FSStructure::new_empty(Some("hello")).unwrap();
+        let hello = Structure::new_empty(Some("hello")).unwrap();
         assert!(hello.get_name() == "hello");
     }
 
@@ -305,13 +365,16 @@ mod tests {
             ("ND2", "ASN", "1", 'A', 7.658, 8.070, 10.981),
         ];
 
-        let structure = FSStructure::new_empty(Some("test")).unwrap();
+        let structure = Structure::new_empty(Some("test")).unwrap();
 
         for atom in atoms {
             structure
                 .add_atom(
-                    atom.0, atom.1, atom.2, atom.3, atom.4, atom.5,
-                    atom.6,
+                    atom.0,
+                    atom.1,
+                    atom.2,
+                    atom.3,
+                    (atom.4, atom.5, atom.6),
                 )
                 .unwrap();
         }
@@ -324,7 +387,7 @@ mod tests {
     #[test]
     fn test_get_chains() {
         let structure =
-            FSStructure::from_path("./data/multi_chain.pdb", Some(0))
+            Structure::from_path("./data/multi_chain.pdb", Some(0))
                 .unwrap();
 
         let chains = ffi::CString::new("P").unwrap();

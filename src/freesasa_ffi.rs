@@ -14,7 +14,7 @@ pub(crate) use internal_::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::fs_ffi::{
+    use crate::freesasa_ffi::{
         fopen, freesasa_calc_structure, freesasa_classifier,
         freesasa_protor_classifier, freesasa_structure_from_pdb,
     };

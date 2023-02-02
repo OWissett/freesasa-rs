@@ -12,7 +12,7 @@ fn main() {
         );
     } else {
         println!(
-            "cargo:warning=FREESASA_STATIC_LIB not set, assuming /usr/local/lib. \
+            "cargo:warning=FREESASA_STATIC_LIB not set, assuming /usr/local/lib or ~/software. \
             If this is not correct, please set FREESASA_STATIC_LIB to the directory \
             containing libfreesasa.a"
         );
