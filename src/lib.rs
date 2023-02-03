@@ -1,6 +1,6 @@
 //! This crate aims to provides a safe interface to the
 //! [freesasa](https://freesasa.github.io/doxygen/index.html) C library, developed by
-//! [Simon Mittinatten](https://github.com/mittinatten) \[1\]. FreeSASA allows you to
+//! [Simon Mitternacht](https://github.com/mittinatten) \[1\]. FreeSASA allows you to
 //! calculate the solvent accessible surface area (SASA) of a protein from its atomic
 //! coordinates. The library is written in C, and is available under the MIT license.
 //!
@@ -14,35 +14,6 @@
 //! It is possible to expose the raw FFI bindings to the C library. This may be useful
 //! if you want to use the C library directly, or if you want to add your own C code.
 //!
-//! ## Installation
-//! The library is currently in a very early stage of development, and is not yet
-//! ready for use. However, if you would like to try it out, you can do so by
-//! adding the git repository as a submodule to your project, and then adding
-//! the following to your `Cargo.toml` file:
-//! ```toml
-//! [dependencies]
-//! rustsasa = { path = "path/to/rustsasa" }
-//! ```
-//!
-//! To build the library, you will need to have the `freesasa` C library installed as a
-//! static library. See the [freesasa repo](https://github.com/mittinatten/freesasa/) for
-//! details on how to do this.
-//!
-//! The build script will look for the `freesasa` static library in /usr/local/lib. However,
-//! if you have installed the library in a different location, you can set the `FREESASA_STATIC_LIB`
-//! environment variable to the directory containing the library. For example, if you have installed
-//! the library in `~/software/lib`, you can set the environment variable as follows:
-//! ```bash
-//! # Add the following to your .bashrc or .zshrc (or similar)
-//! export FREESASA_STATIC_LIB=~/software/lib
-//!
-//! # Or, set it for just this command
-//! FREESSASA_STATIC_LIB=~/software/lib cargo build
-//! ```
-//!
-//! Alternatively, you can use the dockerfile (`Dockerfile.dev`) to set up a dev-container. This
-//! dockerfile will install the `freesasa` library in `/usr/local/lib`, and set-up a Rust development
-//! environment. The dockerfile can be found in the root of the repository.
 //!
 //! ## Example
 //! ```rust
@@ -71,13 +42,6 @@
 #[macro_use]
 extern crate log;
 
-// To expose the raw FFI bindings, compile with `RUSTFLAGS="--cfg expose_ffi"`
-#[cfg(expose_ffi)]
-pub mod freesasa_ffi;
-
-#[cfg(not(expose_ffi))]
-mod freesasa_ffi;
-
 pub mod classifier;
 pub mod node;
 pub mod result;
@@ -86,7 +50,7 @@ pub mod structure;
 mod utils;
 
 // Bring the needed freesasa functions into scope
-use freesasa_ffi::{
+use freesasa_sys::{
     freesasa_set_verbosity, freesasa_verbosity_FREESASA_V_DEBUG,
     freesasa_verbosity_FREESASA_V_NORMAL,
     freesasa_verbosity_FREESASA_V_NOWARNINGS,

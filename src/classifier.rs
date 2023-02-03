@@ -1,6 +1,4 @@
-use crate::freesasa_ffi::{
-    freesasa_classifier, freesasa_protor_classifier,
-};
+use freesasa_sys::{freesasa_classifier, freesasa_protor_classifier};
 
 /// Very similar to the macro definition for the default classifier found in the
 /// freesasa.h file:

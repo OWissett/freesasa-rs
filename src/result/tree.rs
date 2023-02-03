@@ -1,107 +1,20 @@
-use std::{collections::HashMap, ffi, fmt, ptr};
+use std::{collections::HashMap, ffi, ptr};
 
-use crate::{
-    free_raw_c_strings,
-    freesasa_ffi::{
-        freesasa_error_codes_FREESASA_SUCCESS,
-        freesasa_error_codes_FREESASA_WARN, freesasa_node,
-        freesasa_node_area, freesasa_node_children, freesasa_node_free,
-        freesasa_node_name, freesasa_node_next, freesasa_node_type,
-        freesasa_nodetype, freesasa_nodetype_FREESASA_NODE_CHAIN,
-        freesasa_nodetype_FREESASA_NODE_RESIDUE, freesasa_result,
-        freesasa_result_free, freesasa_tree_init, freesasa_tree_join,
-    },
-    structure::Structure,
-    utils::str_to_c_string,
+use freesasa_sys::{
+    freesasa_error_codes_FREESASA_SUCCESS,
+    freesasa_error_codes_FREESASA_WARN, freesasa_node,
+    freesasa_node_area, freesasa_node_children, freesasa_node_free,
+    freesasa_node_name, freesasa_node_next, freesasa_node_type,
+    freesasa_nodetype, freesasa_nodetype_FREESASA_NODE_CHAIN,
+    freesasa_nodetype_FREESASA_NODE_RESIDUE, freesasa_tree_init,
+    freesasa_tree_join,
 };
 
-/// Rust wrapper for FreeSASA C-API freesasa_result object
-#[derive(Debug)]
-pub struct SasaResult {
-    /// Pointer to C-API object
-    ptr: *mut freesasa_result,
+use crate::{
+    free_raw_c_strings, structure::Structure, utils::str_to_c_string,
+};
 
-    /// Total SASA value
-    pub total: f64,
-
-    /// Pointer to underlying C-API SASA array
-    sasa_ptr: *mut f64,
-
-    /// Number of atoms in the structure
-    pub n_atoms: i32,
-}
-
-impl SasaResult {
-    /// Creates a [`SasaResult`] object from a raw `freesasa_result` pointer
-    ///
-    /// ### Safety
-    ///
-    /// This function will dereference the ptr provided. A null check is performed.
-    /// If built with nightly compiler, the pointer's alignment is also checked.
-    ///
-    /// Do not use the pointer given after passing it to this function, since
-    /// [`SasaResult`] is now responsible for the pointer.
-    ///
-    pub unsafe fn new(
-        ptr: *mut freesasa_result,
-    ) -> Result<SasaResult, &'static str> {
-        if ptr.is_null() {
-            return Err("Null pointer was given to FSResult::new");
-        }
-
-        #[cfg(feature = "nightly-features")]
-        if !ptr.is_aligned() {
-            return Err(
-                "Incorrectly aligned pointer was given to FSResult::new",
-            );
-        }
-
-        let total: f64;
-        let sasa_ptr: *mut f64;
-        let n_atoms: i32;
-
-        unsafe {
-            total = (*ptr).total;
-            sasa_ptr = (*ptr).sasa;
-            n_atoms = (*ptr).n_atoms;
-        }
-
-        Ok(SasaResult {
-            ptr,
-            total,
-            sasa_ptr,
-            n_atoms,
-        })
-    }
-
-    /// Returns a vector of SASA values for each ATOM in the molecule
-    pub fn atom_sasa(&self) -> Vec<f64> {
-        let mut v: Vec<f64> = Vec::with_capacity(self.n_atoms as usize);
-        for i in 0..self.n_atoms {
-            unsafe {
-                v.push(*self.sasa_ptr.offset(i as isize));
-            }
-        }
-        v
-    }
-}
-
-impl Drop for SasaResult {
-    /// Releases the memory allocated for the underlying C-API object
-    /// when the object goes out of scope. This is called automatically
-    /// by the compiler - DO NOT CALL THIS FUNCTION YOURSELF.
-    fn drop(&mut self) {
-        unsafe {
-            freesasa_result_free(self.ptr);
-        }
-    }
-}
-
-impl fmt::Display for SasaResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.total)
-    }
-}
+use crate::result::SasaResult;
 
 #[derive(Debug)]
 pub struct SasaTree {
@@ -131,14 +44,18 @@ impl SasaTree {
             );
         }
 
-        if result.ptr.is_null() {
+        if result.is_null() {
             return Err(
                 "Failed to create FSResultTree: result.ptr was null!",
             );
         }
 
         let root = unsafe {
-            freesasa_tree_init(result.ptr, structure.as_ptr(), name)
+            freesasa_tree_init(
+                result.as_const_ptr(),
+                structure.as_const_ptr(),
+                name,
+            )
         };
 
         // Return ownership of CString

@@ -1,17 +1,15 @@
-//!
-
 use std::{ffi, fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
 use crate::free_raw_c_strings;
-use crate::freesasa_ffi::{
+use crate::utils::{char_to_c_char, str_to_c_string};
+use freesasa_sys::{
     fclose, fopen, freesasa_calc_structure, freesasa_calc_tree,
     freesasa_classifier, freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_parameters, freesasa_structure,
     freesasa_structure_add_atom, freesasa_structure_free,
     freesasa_structure_from_pdb, freesasa_structure_new,
 };
-use crate::utils::{char_to_c_char, str_to_c_string};
 
 use crate::result::{SasaResult, SasaTree};
 
@@ -293,6 +291,10 @@ impl Structure {
     pub(crate) fn as_ptr(&self) -> *mut freesasa_structure {
         self.ptr
     }
+
+    pub(crate) fn as_const_ptr(&self) -> *const freesasa_structure {
+        self.ptr as *const freesasa_structure
+    }
 }
 
 // --------------------- //
@@ -320,14 +322,11 @@ impl fmt::Display for Structure {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        classifier::DEFAULT_CLASSIFIER,
-        freesasa_ffi::{
-            freesasa_structure_chain_labels,
-            freesasa_structure_get_chains,
-        },
-        set_fs_verbosity,
+    use freesasa_sys::{
+        freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
+
+    use crate::{classifier::DEFAULT_CLASSIFIER, set_fs_verbosity};
 
     use super::*;
 
