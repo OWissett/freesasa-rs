@@ -6,4 +6,5 @@ Rust FFI bindings for `freesasa` C-API.
 
 Build requires a `libfreesasa.a` static library prebuilt for your architecture.
 
-- To do: Add some sort of way of integrating `freesasa` library building with bindgen
+## Install
+TODO - Add install / Cargo usage

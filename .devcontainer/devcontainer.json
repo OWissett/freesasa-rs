@@ -1,13 +1,15 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 // README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu
 {
-	"name": "FreeSASA C/C++",
+	"name": "FreeSASA C/C++/Rust",
 	"dockerFile": "../Dockerfile.dev",
 	"extensions": [
 		"ms-vscode.cpptools",
 		"ms-azuretools.vscode-docker",
 		"rust-lang.rust-analyzer",
-		"ms-vscode.cmake-tools"
+		"ms-vscode.cmake-tools",
+		"bungcip.better-toml",
+		"serayuzgur.crates"
 	],
 	"remoteUser": "sasa",
 	"containerUser": "sasa"

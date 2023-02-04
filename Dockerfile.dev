@@ -1,4 +1,4 @@
-FROM rust:latest
+FROM ubuntu:18.04
 
 LABEL maintainer="Oliver Wissett"
 LABEL version="1.0"
@@ -30,7 +30,10 @@ RUN apt-get update && apt-get install -y \
     sudo \
     wget \
     libclang-dev \
-    clang
+    clang \
+    linux-tools-generic \
+    python3-pip \
+    gnuplot
 
 # Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
@@ -48,6 +51,7 @@ RUN sed -i 's/plugins=(git)/plugins=(git zsh-syntax-highlighting)/g' ./zshrc \
     && wget https://aur.archlinux.org/cgit/aur.git/plain/0001-zshrc.patch\?h\=oh-my-zsh-git -O zshrc.patch && patch -p1 < zshrc.patch
 
 RUN echo 'source $HOME/.cargo/env' >> ./zshrc
+RUN echo 'alias perf=/usr/lib/linux-tools/4.15.0-201-generic/perf' >> ./zshrc
 
 RUN cp ./zshrc /root/.zshrc
 RUN sudo ln /usr/share/oh-my-zsh/zshrc /etc/skel/.zshrc
@@ -74,7 +78,7 @@ WORKDIR /home/${USERNAME}/freesasa
 RUN git submodule init
 RUN git submodule update
 RUN autoreconf -i
-RUN ./configure
+RUN ./configure CFLAGS="-Ofast" --disable-json --disable-xml
 RUN make
 RUN make install
 
@@ -83,3 +87,7 @@ USER ${USERNAME}
 
 # Install rust tool chain
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+# Install pre-commit
+RUN pip3 install pre-commit
+RUN echo 'export PATH=/home/sasa/.local/bin:$PATH' >> $HOME/.zshrc

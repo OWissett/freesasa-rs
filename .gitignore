@@ -42,3 +42,7 @@ CMakeFiles/
 # Added by cargo
 
 /target
+
+# Some random data files
+*.svg
+*.data
