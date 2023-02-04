@@ -9,7 +9,7 @@ edition = "2021"
 log = "0.4.17"
 env_logger = "0.10.0"
 pdbtbx = { git = "https://github.com/douweschulte/pdbtbx" }
-freesasa-sys = "0.1.5"
+freesasa-sys = "0.1"
 
 [profile.release]
 debug = true
