@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM rust:latest
 
 LABEL maintainer="Oliver Wissett"
 LABEL version="1.0"
@@ -18,8 +18,8 @@ RUN apt-get update && apt-get install -y \
     libjson-c-dev \
     libxml2-dev \
     libxml2-utils \
-    check \    
-    libclang-dev \ 
+    check \
+    libclang-dev \
     clang
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y

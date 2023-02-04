@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM rust:latest
 
 LABEL maintainer="Oliver Wissett"
 LABEL version="1.0"
@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y \
     nano \
     sudo \
     wget \
-    libclang-dev \ 
+    libclang-dev \
     clang
 
 # Install rust tool chain
