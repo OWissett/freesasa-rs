@@ -141,7 +141,7 @@ impl Structure {
     }
 
     pub fn from_pdbtbx(
-        pdbtbx_structure: &pdbtbx::PDB,
+        pdbtbx_structure: pdbtbx::PDB,
     ) -> Result<Self, &'static str> {
         let name = pdbtbx_structure
             .identifier
