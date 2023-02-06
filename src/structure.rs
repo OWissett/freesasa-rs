@@ -345,7 +345,7 @@ mod tests {
         )
         .unwrap();
 
-        let _ = Structure::from_pdbtbx(&pdb).unwrap();
+        let _ = Structure::from_pdbtbx(pdb).unwrap();
     }
 
     #[test]
