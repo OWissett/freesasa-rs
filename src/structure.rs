@@ -140,6 +140,14 @@ impl Structure {
         })
     }
 
+    /// Creates a RustSASA [`Structure`] from a reference to [`pdbtbx::PDB`].
+    pub fn clone_from_pdbtbx(
+        pdbtbx_structure: &pdbtbx::PDB,
+    ) -> Result<Self, &'static str> {
+        Self::from_pdbtbx(pdbtbx_structure.clone())
+    }
+
+    /// Creates a RustSASA [`Structure`] from a [`pdbtbx::PDB`].
     pub fn from_pdbtbx(
         pdbtbx_structure: pdbtbx::PDB,
     ) -> Result<Self, &'static str> {
@@ -148,7 +156,7 @@ impl Structure {
             .clone()
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let fs_structure = Self::new_empty(Some(name.as_str()))?;
+        let mut fs_structure = Self::new_empty(Some(name.as_str()))?;
 
         // Build the structure
         for chain in pdbtbx_structure.chains() {
@@ -194,9 +202,9 @@ impl Structure {
         Ok(fs_structure)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Adds atoms to the structure
     pub fn add_atom(
-        &self,
+        &mut self, // We should indicate to the compiler, that this is a mutable reference, since we are modifying the underlying data structure
         atom_name: &str,
         res_name: &str,
         res_number: &str,
@@ -369,7 +377,7 @@ mod tests {
             ("ND2", "ASN", "1", 'A', 7.658, 8.070, 10.981),
         ];
 
-        let structure = Structure::new_empty(Some("test")).unwrap();
+        let mut structure = Structure::new_empty(Some("test")).unwrap();
 
         for atom in atoms {
             structure

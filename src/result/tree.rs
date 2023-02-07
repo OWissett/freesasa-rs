@@ -113,9 +113,10 @@ impl SasaTree {
     ///
     /// Space: O(N)
     ///
-    pub fn get_subtree_difference(
+    pub fn compare_tree(
         &self,
         subtree: &SasaTree,
+        node_level: &NodeLevel,
     ) -> Vec<String> {
         let chains = SasaTree::get_node(
             self.root,
@@ -361,6 +362,18 @@ impl Drop for SasaTree {
                 return; // Do need to free if null, tree probably was moved
             }
             freesasa_node_free(self.root);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new() {
+        if SasaTree::new(std::ptr::null_mut()).is_ok() {
+            panic!("Created SasaTree with")
         }
     }
 }
