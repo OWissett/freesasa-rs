@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::{collections::HashMap, ffi, ptr};
 
 use freesasa_sys::{
@@ -19,22 +19,22 @@ use crate::{
 use crate::result::SasaResult;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct NodeUID(
+pub struct ResidueUID(
     char,         // Chain
     i32,          // Residue number
     Option<char>, // Residue insertion code
 );
 
-impl Display for NodeUID {
+impl Display for ResidueUID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.2 {
-            Some(code) => write!(f, "{}:{}:{}", self.0, self.1, code),
+            Some(code) => write!(f, "{}:{}{}", self.0, self.1, code),
             None => write!(f, "{}:{}", self.0, self.1),
         }
     }
 }
 
-type NodeMap = HashMap<NodeUID, (*mut freesasa_node, f64)>;
+type ResidueMap = HashMap<ResidueUID, (*mut freesasa_node, f64)>;
 
 #[derive(Debug)]
 pub struct SasaTree {
@@ -96,11 +96,11 @@ impl SasaTree {
     /// * `predicate` - The function to use to compare the SASA values (fn(current: f64, other: f64) -> bool)
     ///
 
-    pub fn compare_tree(
+    pub fn compare_residues(
         &self,
         subtree: &SasaTree,
         predicate: fn(f64, f64) -> bool,
-    ) -> Vec<String> {
+    ) -> Vec<ResidueUID> {
         // ## For Developers
         // ### Psuedo code:
         // 1. Find the chains which contain differences, push a tuple of which each node pointer to
@@ -157,7 +157,7 @@ impl SasaTree {
 
         // Find the chains which have different SASA values
         // Time: O(m) where m is the number of chains
-        let chain_diffs = SasaTree::siblings_with_differences(
+        let chain_diffs = SasaTree::predicate_siblings(
             chains,
             subtree_chains,
             predicate,
@@ -186,7 +186,7 @@ impl SasaTree {
             );
             residue_diffs.insert(
                 chain_id,
-                SasaTree::siblings_with_differences(
+                SasaTree::predicate_siblings(
                     res_node,
                     subtree_res_node,
                     predicate,
@@ -200,10 +200,10 @@ impl SasaTree {
         // Time: O(m * n) - Same as above...
         let mut output_vector = Vec::new();
         for chain in residue_diffs {
-            let i = chain.1.iter().map(|res| -> String {
+            let i = chain.1.iter().map(|res| -> ResidueUID {
                 let uid = SasaTree::get_node_uid(res.0)
                     .expect("Could not get UID");
-                String::from(format!("{}", uid))
+                uid
             });
             output_vector.extend(i);
         }
@@ -232,7 +232,7 @@ impl SasaTree {
     ///
     /// ## Space Complexity
     /// O(n) where n is the number of nodes in the tree
-    fn siblings_with_differences(
+    fn predicate_siblings(
         node: *mut freesasa_node,
         subtree_node: *mut freesasa_node,
         predicate: fn(f64, f64) -> bool,
@@ -331,9 +331,9 @@ impl SasaTree {
     /// and total SASA area.
     ///
     /// Time: O(n) where n is the number of siblings
-    fn get_siblings_as_hashmap(node: *mut freesasa_node) -> NodeMap {
+    fn get_siblings_as_hashmap(node: *mut freesasa_node) -> ResidueMap {
         let mut node = node;
-        let mut h = NodeMap::new();
+        let mut h = ResidueMap::new();
         while !node.is_null() {
             let area = SasaTree::get_node_area(node);
             let sibling_uid = match SasaTree::get_node_uid(node) {
@@ -394,7 +394,7 @@ impl SasaTree {
 
     fn get_node_uid(
         node: *mut freesasa_node,
-    ) -> Result<NodeUID, &'static str> {
+    ) -> Result<ResidueUID, &'static str> {
         unsafe {
             if freesasa_node_type(node)
                 == freesasa_nodetype_FREESASA_NODE_CHAIN
@@ -412,7 +412,7 @@ impl SasaTree {
                     .nth(0)
                     .ok_or("Chain name is empty!")?;
 
-                return Ok(NodeUID(chain, 0, None));
+                return Ok(ResidueUID(chain, 0, None));
             } else if freesasa_node_type(node)
                 == freesasa_nodetype_FREESASA_NODE_RESIDUE
             {
@@ -456,7 +456,7 @@ impl SasaTree {
                         "Residue name is not a number!"
                     })?;
 
-                Ok(NodeUID(chain, name, inscode))
+                Ok(ResidueUID(chain, name, inscode))
             } else {
                 Err("The node type is not a chain or residue!")
             }
@@ -547,7 +547,7 @@ mod tests {
         let tree = pdb.calculate_sasa_tree().unwrap();
         let sub_tree = sub_pdb.unwrap().calculate_sasa_tree().unwrap();
 
-        let diff = tree.compare_tree(&sub_tree, |c, o| {
+        let diff = tree.compare_residues(&sub_tree, |c, o| {
             if o - c > 0.0 {
                 true
             } else {
@@ -555,6 +555,51 @@ mod tests {
             }
         });
 
-        println!("{:?}", diff);
+        for uid in diff {
+            println!("{}", uid);
+        }
+
+        let pdb_7trr =
+            structure::Structure::from_path("data/7trr.pdb", None)
+                .unwrap();
+        // 7trr_gap_141_156_inc.pdb is a subset of 7trr.pdb, with residues 141-156 removed
+        let pdb_7trr_sub = structure::Structure::from_path(
+            "data/7trr_gap_141_156_inc.pdb",
+            None,
+        )
+        .unwrap();
+
+        let tree_7trr = pdb_7trr.calculate_sasa_tree().unwrap();
+        let tree_7trr_sub = pdb_7trr_sub.calculate_sasa_tree().unwrap();
+
+        let sasa_7trr = pdb_7trr.calculate_sasa().unwrap();
+        let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();
+
+        println!(
+            "7trr: {} 7trr_sub: {}",
+            sasa_7trr.total, sasa_7trr_sub.total
+        );
+
+        let diff =
+            tree_7trr.compare_residues(&tree_7trr_sub, |c, o| {
+                if o - c > 0.0 {
+                    true
+                } else {
+                    false
+                }
+            });
+
+        println!("Diff: {:?}", diff);
     }
 }
+
+// Todo: work out why this isn't working
+// Todo: Add methods for displaying the tree for debugginh
+// todo: Tidy up the code
+//       - Function out some large chunks of code
+//       - Add comments
+// todo: add utils:
+//
+//       - get residues -> Vec<Node> or maybe Linked list of nodes
+//       - get chains
+//       - get atoms
