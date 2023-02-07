@@ -1,10 +1,17 @@
-// TODO
+//! Node level enum and conversion functions
+//!
+//! The `NodeLevel` enum is used to specify the level of the tree to be used for
+//! the calculation. The enum is used to convert between the `freesasa_nodetype`
+//! enum used by the `freesasa-sys` library and the `NodeLevel` enum used by the
+//! `rust-sasa` library.
+
 use freesasa_sys::{
-    freesasa_nodetype, freesasa_nodetype_FREESASA_NODE_ATOM,
-    freesasa_nodetype_FREESASA_NODE_CHAIN,
-    freesasa_nodetype_FREESASA_NODE_NONE,
-    freesasa_nodetype_FREESASA_NODE_RESIDUE,
-    freesasa_nodetype_FREESASA_NODE_STRUCTURE,
+    freesasa_nodetype,
+    freesasa_nodetype_FREESASA_NODE_ATOM as FREESASA_NODE_ATOM,
+    freesasa_nodetype_FREESASA_NODE_CHAIN as FREESASA_NODE_CHAIN,
+    freesasa_nodetype_FREESASA_NODE_NONE as FREESASA_NODE_NONE,
+    freesasa_nodetype_FREESASA_NODE_RESIDUE as FREESASA_NODE_RESIDUE,
+    freesasa_nodetype_FREESASA_NODE_STRUCTURE as FREESASA_NODE_STRUCTURE,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,15 +32,12 @@ impl Default for NodeLevel {
 impl NodeLevel {
     pub fn from_fs_level(level: freesasa_nodetype) -> Self {
         match level {
-            freesasa_nodetype_FREESASA_NODE_NONE => NodeLevel::None,
-            freesasa_nodetype_FREESASA_NODE_ATOM => NodeLevel::Atom,
-            freesasa_nodetype_FREESASA_NODE_RESIDUE => {
-                NodeLevel::Residue
-            }
-            freesasa_nodetype_FREESASA_NODE_CHAIN => NodeLevel::Chain,
-            freesasa_nodetype_FREESASA_NODE_STRUCTURE => {
-                NodeLevel::Model
-            }
+            FREESASA_NODE_NONE => NodeLevel::None,
+            FREESASA_NODE_ATOM => NodeLevel::Atom,
+            FREESASA_NODE_RESIDUE => NodeLevel::Residue,
+            FREESASA_NODE_CHAIN => NodeLevel::Chain,
+            FREESASA_NODE_STRUCTURE => NodeLevel::Model,
+            _ => panic!("Invalid freesasa_nodetype"),
         }
     }
 
@@ -65,10 +69,10 @@ impl NodeLevel {
 
 fn fs_level_from_node_level(level: NodeLevel) -> freesasa_nodetype {
     match level {
-        NodeLevel::None => freesasa_nodetype_FREESASA_NODE_NONE,
-        NodeLevel::Atom => freesasa_nodetype_FREESASA_NODE_ATOM,
-        NodeLevel::Residue => freesasa_nodetype_FREESASA_NODE_RESIDUE,
-        NodeLevel::Chain => freesasa_nodetype_FREESASA_NODE_CHAIN,
-        NodeLevel::Model => freesasa_nodetype_FREESASA_NODE_STRUCTURE,
+        NodeLevel::None => FREESASA_NODE_NONE,
+        NodeLevel::Atom => FREESASA_NODE_ATOM,
+        NodeLevel::Residue => FREESASA_NODE_RESIDUE,
+        NodeLevel::Chain => FREESASA_NODE_CHAIN,
+        NodeLevel::Model => FREESASA_NODE_STRUCTURE,
     }
 }

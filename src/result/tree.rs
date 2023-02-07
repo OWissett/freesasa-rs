@@ -71,53 +71,58 @@ impl SasaTree {
     /// Returns the differences with this tree and another. Note, it is assumed that the other tree,
     /// is a subtree (as in all nodes contained in subtree and also present in this tree)
     ///
-    /// ## For Developers
-    /// ### Psuedo code:
-    /// 1. Find the chains which contain differences, push a tuple of which each node pointer to
-    ///    to a vector.
-    /// 2. For each chain with a difference, calculate the pair-wise residue differences
-    /// 3. Store information about the residues with a change in values
+    /// ## Arguments
+    /// * `subtree` - The subtree to compare to
+    /// * `predicate` - The function to use to compare the SASA values (fn(current: f64, other: f64) -> bool)
     ///
-    ///
-    /// NOTE: This function should probably be re-written using recursion, since we do the same
-    ///       for chains and residues, but since it is only two levels deep I didn't bother...
-    ///
-    /// ### Time Analysis:
-    /// By calculating the differences between chains first, we can identify which chains need to
-    /// be searched for the exact residues. This will likely increase the speed since proteins
-    /// have few chains (typlically less than 10, and I am being generous) but have many residues,
-    /// as such, we have reduced the search space. One thing to note is that the chain
-    /// in which the deletion has occurred in will be always be searched on a residue level. This
-    /// is because deletion of residues will change the SASA. There are possibilities: 1, the
-    /// deleted region was surface exposed; or 2, the deleted region was buried. Both possibilities
-    /// will cause a change in SASA area for that chain.
-    ///
-    ///  A little bit of time analysis can show this:
-    ///
-    /// Let m = be the number of chains
-    /// Let n = be the average number of residues per chain
-    /// Let N be the total number of residues
-    ///
-    /// As such, N = m * n
-    ///
-    /// Time: O(1 + 1 + m + 2 * (m * n))
-    ///       => O(2mn + m + 2)
-    ///       => O(2mn + m)
-    ///
-    /// As m -> 1 and n -> 1, then O(2mn + m) -> O(3) ~ O(1)
-    /// As m -> N and n -> 1, then O(2mn + m) -> O(3N) ~ O(N)
-    /// If m = 1, then O(2n) and n = N, therefore, O(2N) ~ O(N)
-    ///
-    ///
-    /// Time: Best: O(1), Worst: O(N) where N is all residues in the tree
-    ///
-    /// Space: O(N)
-    ///
+
     pub fn compare_tree(
         &self,
         subtree: &SasaTree,
-        node_level: &NodeLevel,
+        predicate: fn(f64, f64) -> bool,
     ) -> Vec<String> {
+        // ## For Developers
+        // ### Psuedo code:
+        // 1. Find the chains which contain differences, push a tuple of which each node pointer to
+        //    to a vector.
+        // 2. For each chain with a difference, calculate the pair-wise residue differences
+        // 3. Store information about the residues with a change in values
+        //
+        //
+        // NOTE: This function should probably be re-written using recursion, since we do the same
+        //       for chains and residues, but since it is only two levels deep I didn't bother...
+        //
+        // ### Time Analysis:
+        // By calculating the differences between chains first, we can identify which chains need to
+        // be searched for the exact residues. This will likely increase the speed since proteins
+        // have few chains (typlically less than 10, and I am being generous) but have many residues,
+        // as such, we have reduced the search space. One thing to note is that the chain
+        // in which the deletion has occurred in will be always be searched on a residue level. This
+        // is because deletion of residues will change the SASA. There are possibilities: 1, the
+        // deleted region was surface exposed; or 2, the deleted region was buried. Both possibilities
+        // will cause a change in SASA area for that chain.
+        //
+        //  A little bit of time analysis can show this:
+        //
+        // Let m = be the number of chains
+        // Let n = be the average number of residues per chain
+        // Let N be the total number of residues
+        //
+        // As such, N = m * n
+        //
+        // Time: O(1 + 1 + m + 2 * (m * n))
+        //       => O(2mn + m + 2)
+        //       => O(2mn + m)
+        //
+        // As m -> 1 and n -> 1, then O(2mn + m) -> O(3) ~ O(1)
+        // As m -> N and n -> 1, then O(2mn + m) -> O(3N) ~ O(N)
+        // If m = 1, then O(2n) and n = N, therefore, O(2N) ~ O(N)
+        //
+        //
+        // Time: Best: O(1), Worst: O(N) where N is all residues in the tree
+        //
+        // Space: O(N)
+        //
         let chains = SasaTree::get_node(
             self.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
@@ -132,8 +137,11 @@ impl SasaTree {
 
         // Find the chains which have different SASA values
         // Time: O(m) where m is the number of chains
-        let chain_diffs =
-            SasaTree::siblings_with_differences(chains, subtree_chains);
+        let chain_diffs = SasaTree::siblings_with_differences(
+            chains,
+            subtree_chains,
+            predicate,
+        );
 
         // Find the residues which have differences
         let mut residue_diffs: HashMap<
@@ -161,6 +169,7 @@ impl SasaTree {
                 SasaTree::siblings_with_differences(
                     res_node,
                     subtree_res_node,
+                    predicate,
                 ),
             );
         }
@@ -206,6 +215,7 @@ impl SasaTree {
     fn siblings_with_differences(
         node: *mut freesasa_node,
         subtree_node: *mut freesasa_node,
+        predicate: fn(f64, f64) -> bool,
     ) -> Vec<(*mut freesasa_node, *mut freesasa_node)> {
         let siblings = SasaTree::get_siblings_as_vector(node, None);
         let subtree_siblings =
@@ -220,7 +230,7 @@ impl SasaTree {
 
             match subtree_siblings.get(&name) {
                 Some((subtree_node, subtree_area)) => {
-                    if (area - subtree_area).abs() != 0.0 {
+                    if predicate(area, *subtree_area) {
                         v.push((sibling, *subtree_node));
                     }
                 }

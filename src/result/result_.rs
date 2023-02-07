@@ -72,14 +72,18 @@ impl SasaResult {
         v
     }
 
+    /// Returns a mutable pointer to the underlying C-API object
+    #[allow(dead_code)]
     pub(crate) fn as_ptr(&self) -> *mut freesasa_result {
         self.ptr
     }
 
+    /// Returns a const pointer to the underlying C-API object
     pub(crate) fn as_const_ptr(&self) -> *const freesasa_result {
         self.ptr as *const freesasa_result
     }
 
+    /// Returns true if the pointer is null
     pub(crate) fn is_null(&self) -> bool {
         self.ptr.is_null()
     }
