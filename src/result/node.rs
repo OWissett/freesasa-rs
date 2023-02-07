@@ -76,3 +76,9 @@ fn fs_level_from_node_level(level: NodeLevel) -> freesasa_nodetype {
         NodeLevel::Model => FREESASA_NODE_STRUCTURE,
     }
 }
+
+
+pub struct SasaNode {
+    name: String,
+
+}

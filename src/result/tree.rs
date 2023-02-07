@@ -1,10 +1,12 @@
+use std::fmt::Display;
 use std::{collections::HashMap, ffi, ptr};
 
 use freesasa_sys::{
     freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_error_codes_FREESASA_WARN, freesasa_node,
     freesasa_node_area, freesasa_node_children, freesasa_node_free,
-    freesasa_node_name, freesasa_node_next, freesasa_node_type,
+    freesasa_node_name, freesasa_node_next, freesasa_node_parent,
+    freesasa_node_residue_number, freesasa_node_type,
     freesasa_nodetype, freesasa_nodetype_FREESASA_NODE_CHAIN,
     freesasa_nodetype_FREESASA_NODE_RESIDUE, freesasa_tree_init,
     freesasa_tree_join,
@@ -15,6 +17,24 @@ use crate::{
 };
 
 use crate::result::SasaResult;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct NodeUID(
+    char,         // Chain
+    i32,          // Residue number
+    Option<char>, // Residue insertion code
+);
+
+impl Display for NodeUID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.2 {
+            Some(code) => write!(f, "{}:{}:{}", self.0, self.1, code),
+            None => write!(f, "{}:{}", self.0, self.1),
+        }
+    }
+}
+
+type NodeMap = HashMap<NodeUID, (*mut freesasa_node, f64)>;
 
 #[derive(Debug)]
 pub struct SasaTree {
@@ -123,15 +143,15 @@ impl SasaTree {
         //
         // Space: O(N)
         //
-        let chains = SasaTree::get_node(
-            self.root,
+        let chains = SasaTree::get_raw_node(
+            &self.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
 
         // Get the second tree's chains
         // Time: O(1)
-        let subtree_chains = SasaTree::get_node(
-            subtree.root,
+        let subtree_chains = SasaTree::get_raw_node(
+            &subtree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
 
@@ -155,17 +175,17 @@ impl SasaTree {
         //                  This is realistically faster than computing all residues which is O(N),
         //                  where N is the total number of residues in the residues in the structure
         for chain in chain_diffs {
-            let name = SasaTree::get_node_name(chain.0);
-            let res_node = SasaTree::get_node(
-                chain.0,
+            let chain_id = SasaTree::get_node_name(chain.0);
+            let res_node = SasaTree::get_raw_node(
+                &chain.0,
                 freesasa_nodetype_FREESASA_NODE_RESIDUE,
             );
-            let subtree_res_node = SasaTree::get_node(
-                chain.1,
+            let subtree_res_node = SasaTree::get_raw_node(
+                &chain.1,
                 freesasa_nodetype_FREESASA_NODE_RESIDUE,
             );
             residue_diffs.insert(
-                name,
+                chain_id,
                 SasaTree::siblings_with_differences(
                     res_node,
                     subtree_res_node,
@@ -181,9 +201,9 @@ impl SasaTree {
         let mut output_vector = Vec::new();
         for chain in residue_diffs {
             let i = chain.1.iter().map(|res| -> String {
-                chain.0.clone()
-                    + ":"
-                    + SasaTree::get_node_name(res.0).as_str()
+                let uid = SasaTree::get_node_uid(res.0)
+                    .expect("Could not get UID");
+                String::from(format!("{}", uid))
             });
             output_vector.extend(i);
         }
@@ -225,10 +245,17 @@ impl SasaTree {
 
         // Find the chains which have different SASA values
         for sibling in siblings {
-            let name = SasaTree::get_node_name(sibling);
+            let residue_uid = match SasaTree::get_node_uid(sibling) {
+                Ok(uid) => uid,
+                Err(e) => {
+                    println!("Error: {:?}", e);
+                    warn!("Could not get residue UID for node: {:?}. Skipping...", sibling);
+                    continue;
+                }
+            };
             let area = SasaTree::get_node_area(sibling);
 
-            match subtree_siblings.get(&name) {
+            match subtree_siblings.get(&residue_uid) {
                 Some((subtree_node, subtree_area)) => {
                     if predicate(area, *subtree_area) {
                         v.push((sibling, *subtree_node));
@@ -264,7 +291,7 @@ impl SasaTree {
         if code == freesasa_error_codes_FREESASA_SUCCESS {
             Ok(())
         } else if code == freesasa_error_codes_FREESASA_WARN {
-            println!("A warning occured when joining result trees!");
+            warn!("Freesasa returned a warning code when joining result trees!");
             Ok(()) // Everything is probably fine???
         } else {
             Err("An error occured whilst join result trees!")
@@ -282,38 +309,47 @@ impl SasaTree {
     /// ## Returns
     /// A mutable pointer to the matching node or a null pointer if no match was found.
     ///
-    fn get_node(
-        node: *mut freesasa_node,
+    fn get_raw_node(
+        node: &*mut freesasa_node,
         node_type: freesasa_nodetype,
     ) -> *mut freesasa_node {
-        let current_node_type = unsafe { freesasa_node_type(node) };
+        let current_node_type = unsafe { freesasa_node_type(*node) };
         if current_node_type == node_type {
-            return node;
+            return *node;
         }
 
-        let node = unsafe { freesasa_node_children(node) };
+        let node = unsafe { freesasa_node_children(*node) };
         if node.is_null() {
             // Terminate if we have no children (e.g., end of tree)
             return node;
         }
 
-        SasaTree::get_node(node, node_type) // Then we go deeper!!!
+        SasaTree::get_raw_node(&node, node_type) // Then we go deeper!!!
     }
 
     /// Makes a HashMap with the node names as the keys, and the values tuples of node pointer
     /// and total SASA area.
     ///
     /// Time: O(n) where n is the number of siblings
-    fn get_siblings_as_hashmap(
-        node: *mut freesasa_node,
-    ) -> HashMap<String, (*mut freesasa_node, f64)> {
+    fn get_siblings_as_hashmap(node: *mut freesasa_node) -> NodeMap {
         let mut node = node;
-        let mut h = HashMap::<String, (*mut freesasa_node, f64)>::new();
+        let mut h = NodeMap::new();
         while !node.is_null() {
             let area = SasaTree::get_node_area(node);
-            let name = SasaTree::get_node_name(node);
-            if h.insert(name, (node, area)).is_some() {
-                println!("WARNING: It appears that multiple siblings have the same name: {}", SasaTree::get_node_name(node));
+            let sibling_uid = match SasaTree::get_node_uid(node) {
+                Ok(uid) => uid,
+                Err(_) => {
+                    warn!("Could not get residue UID for node: {:?}. Skipping...", node);
+
+                    node = unsafe { freesasa_node_next(node) };
+                    continue;
+                }
+            };
+            if h.insert(sibling_uid, (node, area)).is_some() {
+                println!(
+                    "WARNING: It appears that multiple siblings have the same name: {:?}",
+                    SasaTree::get_node_uid(node)
+                );
             }
             node = unsafe { freesasa_node_next(node) };
         }
@@ -356,6 +392,77 @@ impl SasaTree {
         String::from(name)
     }
 
+    fn get_node_uid(
+        node: *mut freesasa_node,
+    ) -> Result<NodeUID, &'static str> {
+        unsafe {
+            if freesasa_node_type(node)
+                == freesasa_nodetype_FREESASA_NODE_CHAIN
+            {
+                let chain = freesasa_node_name(node);
+
+                if chain.is_null() {
+                    return Err("Chain name is null!");
+                }
+
+                let chain = ffi::CStr::from_ptr(chain)
+                    .to_str()
+                    .map_err(|_| "Chain name is not valid UTF-8!")?
+                    .chars()
+                    .nth(0)
+                    .ok_or("Chain name is empty!")?;
+
+                return Ok(NodeUID(chain, 0, None));
+            } else if freesasa_node_type(node)
+                == freesasa_nodetype_FREESASA_NODE_RESIDUE
+            {
+                let name = freesasa_node_residue_number(node);
+
+                if name.is_null() {
+                    return Err("Residue name is null!");
+                }
+
+                let chain =
+                    freesasa_node_name(freesasa_node_parent(node));
+
+                if chain.is_null() {
+                    return Err("Chain name is null!");
+                }
+
+                let chain = ffi::CStr::from_ptr(chain)
+                    .to_str()
+                    .map_err(|_| "Chain name is not valid UTF-8!")?
+                    .chars()
+                    .nth(0)
+                    .ok_or("Chain name is empty!")?;
+
+                let name = ffi::CStr::from_ptr(name);
+                let mut name = name
+                    .to_str()
+                    .map_err(|_| "Residue name is not valid UTF-8!")?;
+
+                let inscode = {
+                    if name.chars().last().unwrap().is_alphabetic() {
+                        name = &name[..name.len() - 1];
+                        Some(name.chars().last().unwrap())
+                    } else {
+                        None
+                    }
+                };
+
+                let name =
+                    name.trim().parse::<i32>().map_err(|_| {
+                        println!("Residue name:{}", name);
+                        "Residue name is not a number!"
+                    })?;
+
+                Ok(NodeUID(chain, name, inscode))
+            } else {
+                Err("The node type is not a chain or residue!")
+            }
+        }
+    }
+
     /// Returns the total area of the node as a f64
     fn get_node_area(node: *mut freesasa_node) -> f64 {
         unsafe { (*freesasa_node_area(node)).total }
@@ -378,6 +485,8 @@ impl Drop for SasaTree {
 
 #[cfg(test)]
 mod tests {
+    use crate::structure;
+
     use super::*;
 
     #[test]
@@ -385,5 +494,67 @@ mod tests {
         if SasaTree::new(std::ptr::null_mut()).is_ok() {
             panic!("Created SasaTree with")
         }
+    }
+
+    #[test]
+    fn get_node() {
+        let pdb = structure::Structure::from_path(
+            "data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+        let tree = pdb.calculate_sasa_tree().unwrap();
+
+        let node = SasaTree::get_raw_node(
+            &tree.root,
+            freesasa_nodetype_FREESASA_NODE_CHAIN,
+        );
+        let name = SasaTree::get_node_name(node);
+        assert_eq!(name, "A");
+    }
+
+    #[test]
+    fn get_siblings_as_hashmap() {
+        let pdb = structure::Structure::from_path(
+            "data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+        let tree = pdb.calculate_sasa_tree().unwrap();
+
+        let node = SasaTree::get_raw_node(
+            &tree.root,
+            freesasa_nodetype_FREESASA_NODE_CHAIN,
+        );
+        let siblings = SasaTree::get_siblings_as_hashmap(node);
+
+        assert_eq!(siblings.len(), 1);
+    }
+
+    #[test]
+    fn test_compare() {
+        let pdb = structure::Structure::from_path(
+            "data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+
+        let sub_pdb = structure::Structure::from_path(
+            "data/single_chain_w_del.pdb",
+            None,
+        );
+
+        let tree = pdb.calculate_sasa_tree().unwrap();
+        let sub_tree = sub_pdb.unwrap().calculate_sasa_tree().unwrap();
+
+        let diff = tree.compare_tree(&sub_tree, |c, o| {
+            if o - c > 0.0 {
+                true
+            } else {
+                false
+            }
+        });
+
+        println!("{:?}", diff);
     }
 }
