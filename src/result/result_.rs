@@ -143,3 +143,69 @@ impl<'a> Iterator for SasaResultIter<'a> {
         Some(value)
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{set_fs_verbosity, structure, FreesasaVerbosity};
+
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let ptr = std::ptr::null_mut();
+        let result = unsafe { SasaResult::new(ptr) };
+        assert!(result.is_err());
+
+        let structure = structure::Structure::from_path(
+            "./data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+
+        let _ = structure.calculate_sasa().unwrap();
+    }
+
+    #[test]
+    fn test_atom_sasa() {
+        set_fs_verbosity(FreesasaVerbosity::Debug);
+
+        let structure = structure::Structure::from_path(
+            "./data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+
+        let result = structure.calculate_sasa().unwrap();
+        let sasa = result.atom_sasa();
+
+        assert_eq!(sasa.len(), 1911);
+    }
+
+    #[test]
+    fn test_iter() {
+        set_fs_verbosity(FreesasaVerbosity::Debug);
+
+        let structure = structure::Structure::from_path(
+            "./data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+
+        let result = structure.calculate_sasa().unwrap();
+        let sasa = result.iter().collect::<Vec<f64>>();
+        assert_eq!(sasa.len(), 1911);
+
+        let sasa = result.iter().sum::<f64>();
+        assert_eq!(sasa, result.total);
+
+        let sasa = result.iter().fold(0.0, |acc, x| acc + x);
+        assert_eq!(sasa, result.total);
+
+        let sasa = result.iter().map(|x| x * 2.0).sum::<f64>();
+        assert_eq!(sasa, result.total * 2.0);
+
+        let sasa_count = result.iter().filter(|x| *x > 0.0).count();
+        assert_eq!(sasa_count, 901);
+    }
+}
