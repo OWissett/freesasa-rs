@@ -25,6 +25,20 @@ pub struct ResidueUID(
     Option<char>, // Residue insertion code
 );
 
+impl ResidueUID {
+    pub fn get_chain(&self) -> char {
+        self.0
+    }
+
+    pub fn get_resnum(&self) -> i32 {
+        self.1
+    }
+
+    pub fn get_rescode(&self) -> Option<char> {
+        self.2
+    }
+}
+
 impl Display for ResidueUID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.2 {
