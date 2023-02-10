@@ -141,16 +141,9 @@ impl Structure {
         })
     }
 
-    /// Creates a RustSASA [`Structure`] from a reference to [`pdbtbx::PDB`].
-    pub fn clone_from_pdbtbx(
-        pdbtbx_structure: &pdbtbx::PDB,
-    ) -> Result<Self, &'static str> {
-        Self::from_pdbtbx(pdbtbx_structure.clone())
-    }
-
     /// Creates a RustSASA [`Structure`] from a [`pdbtbx::PDB`].
     pub fn from_pdbtbx(
-        pdbtbx_structure: pdbtbx::PDB,
+        pdbtbx_structure: &pdbtbx::PDB,
     ) -> Result<Self, &'static str> {
         let name = pdbtbx_structure
             .identifier
@@ -355,7 +348,22 @@ mod tests {
         )
         .unwrap();
 
-        let _ = Structure::from_pdbtbx(pdb).unwrap();
+        let pdb_from_pdbtbx = Structure::from_pdbtbx(&pdb).unwrap();
+
+        let pdb_from_path =
+            Structure::from_path("./data/single_chain.pdb", None)
+                .unwrap();
+
+        let tree_pdbtbx =
+            pdb_from_pdbtbx.calculate_sasa_tree().unwrap();
+        let tree_path = pdb_from_path.calculate_sasa_tree().unwrap();
+
+        assert_eq!(
+            0,
+            tree_pdbtbx
+                .compare_residues(&tree_path, |a, b| a == b)
+                .len()
+        );
     }
 
     #[test]
