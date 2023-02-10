@@ -110,11 +110,14 @@ impl SasaTree {
     /// * `predicate` - The function to use to compare the SASA values (fn(current: f64, other: f64) -> bool)
     ///
 
-    pub fn compare_residues(
+    pub fn compare_residues<F>(
         &self,
         subtree: &SasaTree,
-        predicate: fn(f64, f64) -> bool,
-    ) -> Vec<ResidueUID> {
+        predicate: F,
+    ) -> Vec<ResidueUID>
+    where
+        F: FnOnce(f64, f64) -> bool + Copy,
+    {
         // ## For Developers
         // ### Psuedo code:
         // 1. Find the chains which contain differences, push a tuple of which each node pointer to
@@ -246,11 +249,14 @@ impl SasaTree {
     ///
     /// ## Space Complexity
     /// O(n) where n is the number of nodes in the tree
-    fn predicate_siblings(
+    fn predicate_siblings<F>(
         node: *mut freesasa_node,
         subtree_node: *mut freesasa_node,
-        predicate: fn(f64, f64) -> bool,
-    ) -> Vec<(*mut freesasa_node, *mut freesasa_node)> {
+        predicate: F,
+    ) -> Vec<(*mut freesasa_node, *mut freesasa_node)>
+    where
+        F: FnOnce(f64, f64) -> bool + Copy,
+    {
         let siblings = SasaTree::get_siblings_as_vector(node, None);
         let subtree_siblings =
             SasaTree::get_siblings_as_hashmap(subtree_node);
@@ -561,49 +567,43 @@ mod tests {
         let tree = pdb.calculate_sasa_tree().unwrap();
         let sub_tree = sub_pdb.unwrap().calculate_sasa_tree().unwrap();
 
-        let diff = tree.compare_residues(&sub_tree, |c, o| {
-            if o - c > 0.0 {
-                true
-            } else {
-                false
-            }
-        });
+        let diff = tree.compare_residues(&sub_tree, |c, o| o - c > 0.0);
 
         for uid in diff {
             println!("{}", uid);
         }
 
-        let pdb_7trr =
-            structure::Structure::from_path("data/7trr.pdb", None)
-                .unwrap();
-        // 7trr_gap_141_156_inc.pdb is a subset of 7trr.pdb, with residues 141-156 removed
-        let pdb_7trr_sub = structure::Structure::from_path(
-            "data/7trr_gap_141_156_inc.pdb",
-            None,
-        )
-        .unwrap();
-
-        let tree_7trr = pdb_7trr.calculate_sasa_tree().unwrap();
-        let tree_7trr_sub = pdb_7trr_sub.calculate_sasa_tree().unwrap();
-
-        let sasa_7trr = pdb_7trr.calculate_sasa().unwrap();
-        let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();
-
-        println!(
-            "7trr: {} 7trr_sub: {}",
-            sasa_7trr.total, sasa_7trr_sub.total
-        );
-
-        let diff =
-            tree_7trr.compare_residues(&tree_7trr_sub, |c, o| {
-                if o - c > 0.0 {
-                    true
-                } else {
-                    false
-                }
-            });
-
-        println!("Diff: {:?}", diff);
+        // let pdb_7trr =
+        //     structure::Structure::from_path("data/7trr.pdb", None)
+        //         .unwrap();
+        // // 7trr_gap_141_156_inc.pdb is a subset of 7trr.pdb, with residues 141-156 removed
+        // let pdb_7trr_sub = structure::Structure::from_path(
+        //     "data/7trr_gap_141_156_inc.pdb",
+        //     None,
+        // )
+        // .unwrap();
+        //
+        // let tree_7trr = pdb_7trr.calculate_sasa_tree().unwrap();
+        // let tree_7trr_sub = pdb_7trr_sub.calculate_sasa_tree().unwrap();
+        //
+        // let sasa_7trr = pdb_7trr.calculate_sasa().unwrap();
+        // let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();
+        //
+        // println!(
+        //     "7trr: {} 7trr_sub: {}",
+        //     sasa_7trr.total, sasa_7trr_sub.total
+        // );
+        //
+        // let diff =
+        //     tree_7trr.compare_residues(&tree_7trr_sub, |c, o| {
+        //         if o - c > 0.0 {
+        //             true
+        //         } else {
+        //             false
+        //         }
+        //     });
+        //
+        // println!("Diff: {:?}", diff);
     }
 }
 
