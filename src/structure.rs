@@ -21,9 +21,10 @@ const DEFAULT_CALCULATION_PARAMETERS: *const freesasa_parameters =
 
 /// Simple Rust struct wrapper for freesasa_structure object.
 ///
+/// Object currently can only be instantiated from a path to a pdb,
+/// as an empty structure, or from a [`pdbtbx::PDB`] object.
 ///
-/// Object currently can only be instantiated from a pdb_path or as
-/// an empty structure. When creating an empty structure, you need
+/// When creating an empty structure, you need
 /// to then add atoms to it using `.add_atoms()` before attempting
 /// to calculate the SASA.
 #[derive(Debug)]
@@ -296,6 +297,7 @@ impl Structure {
     /// If this pointer is deallocated early, you will get undefined behaviour since
     /// Drop will attempt to free the same memory (e.g. double free) when this FSStructure
     /// object is destroyed.
+    #[allow(dead_code)]
     pub(crate) fn as_ptr(&self) -> *mut freesasa_structure {
         self.ptr
     }
