@@ -573,37 +573,33 @@ mod tests {
             println!("{}", uid);
         }
 
-        // let pdb_7trr =
-        //     structure::Structure::from_path("data/7trr.pdb", None)
-        //         .unwrap();
-        // // 7trr_gap_141_156_inc.pdb is a subset of 7trr.pdb, with residues 141-156 removed
-        // let pdb_7trr_sub = structure::Structure::from_path(
-        //     "data/7trr_gap_141_156_inc.pdb",
-        //     None,
-        // )
-        // .unwrap();
-        //
-        // let tree_7trr = pdb_7trr.calculate_sasa_tree().unwrap();
-        // let tree_7trr_sub = pdb_7trr_sub.calculate_sasa_tree().unwrap();
-        //
-        // let sasa_7trr = pdb_7trr.calculate_sasa().unwrap();
-        // let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();
-        //
-        // println!(
-        //     "7trr: {} 7trr_sub: {}",
-        //     sasa_7trr.total, sasa_7trr_sub.total
-        // );
-        //
-        // let diff =
-        //     tree_7trr.compare_residues(&tree_7trr_sub, |c, o| {
-        //         if o - c > 0.0 {
-        //             true
-        //         } else {
-        //             false
-        //         }
-        //     });
-        //
-        // println!("Diff: {:?}", diff);
+        let pdb_7trr =
+            structure::Structure::from_path("data/7trr.pdb", None)
+                .unwrap();
+        // 7trr_gap_141_156_inc.pdb is a subset of 7trr.pdb, with residues 141-156 removed
+        let pdb_7trr_sub = structure::Structure::from_path(
+            "data/7trr_gap_141_156_inc.pdb",
+            None,
+        )
+        .unwrap();
+
+        let tree_7trr = pdb_7trr.calculate_sasa_tree().unwrap();
+        let tree_7trr_sub = pdb_7trr_sub.calculate_sasa_tree().unwrap();
+
+        let sasa_7trr = pdb_7trr.calculate_sasa().unwrap();
+        let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();
+
+        println!(
+            "7trr: {} \n7trr_sub: {}",
+            sasa_7trr.total, sasa_7trr_sub.total
+        );
+
+        let diff = tree_7trr
+            .compare_residues(&tree_7trr_sub, |c, o| o - c != 0.0);
+
+        for uid in diff {
+            println!("{}", uid);
+        }
     }
 }
 
