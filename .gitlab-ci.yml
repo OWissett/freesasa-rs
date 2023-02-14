@@ -70,6 +70,7 @@ pages:
   script:
     - cargo doc --no-deps --all-features --document-private-items
     - mv target/doc public
+    - echo "<meta http-equiv=refresh content=0;url=freesasa_rs/index.html>" > public/index.html
   artifacts:
     paths:
       - public
