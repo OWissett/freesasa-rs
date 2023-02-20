@@ -46,6 +46,7 @@ pub mod classifier;
 pub mod result;
 pub mod selection;
 pub mod structure;
+pub mod uids;
 mod utils;
 
 // Bring the needed freesasa functions into scope

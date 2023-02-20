@@ -1,4 +1,5 @@
-use std::fmt::{Debug, Display};
+use std::fmt::Debug;
+use std::ops::Index;
 use std::{collections::HashMap, ffi, ptr};
 
 use freesasa_sys::{
@@ -11,65 +12,239 @@ use freesasa_sys::{
     freesasa_nodetype_FREESASA_NODE_RESIDUE, freesasa_tree_init,
     freesasa_tree_join,
 };
+use petgraph::graph;
 
+use crate::uids::{NodeUID, ResidueUID, ResidueUIDMap};
 use crate::{
     free_raw_c_strings, structure::Structure, utils::str_to_c_string,
 };
 
 use crate::result::SasaResult;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ResidueUID(
-    char,         // Chain
-    i32,          // Residue number
-    Option<char>, // Residue insertion code
-);
+use super::node::{Node, NodeArea, NodeType};
 
-impl ResidueUID {
-    pub fn get_chain(&self) -> char {
-        self.0
-    }
-
-    pub fn get_resnum(&self) -> i32 {
-        self.1
-    }
-
-    pub fn get_rescode(&self) -> Option<char> {
-        self.2
-    }
-}
-
-impl Display for ResidueUID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.2 {
-            Some(code) => write!(f, "{}:{}{}", self.0, self.1, code),
-            None => write!(f, "{}:{}", self.0, self.1),
-        }
-    }
-}
-
-type ResidueMap = HashMap<ResidueUID, (*mut freesasa_node, f64)>;
-
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
 pub struct SasaTree {
-    root: *mut freesasa_node,
+    graph: petgraph::Graph<Node, ()>,
 }
 
 impl SasaTree {
+    /// Build a [`SasaTree`] from a [`freesasa_node`].
+    ///
+    /// This function is unsafe, as it takes a raw pointer to a [`freesasa_node`]. This pointer is
+    /// freed after the tree is built.
+    pub(crate) fn from_ptr(node: *mut freesasa_node) -> Self {
+        let mut graph = petgraph::Graph::<Node, ()>::new();
+
+        Self::recursive_add_node(&mut graph, &node, None);
+
+        unsafe {
+            freesasa_node_free(node);
+        }
+
+        SasaTree { graph }
+    }
+
+    /// Build a [`SasaTree`] from a [`SasaResult`].
+    pub fn from_result(
+        result: &SasaResult,
+        structure: &Structure,
+    ) -> Result<Self, &'static str> {
+        let name = str_to_c_string(structure.get_name())?.into_raw();
+
+        if structure.is_null() {
+            return Err(
+                "Failed to create SasaTree: structure pointer was null!",
+            );
+        }
+
+        if result.is_null() {
+            return Err(
+                "Failed to create SasaTree: result pointer was null!",
+            );
+        }
+
+        let root = unsafe {
+            freesasa_tree_init(
+                result.as_const_ptr(),
+                structure.as_const_ptr(),
+                name,
+            )
+        };
+
+        // Return ownership of CString
+        free_raw_c_strings![name];
+
+        if root.is_null() {
+            return Err("Failed to create SasaTree: freesasa_tree_init returned a null pointer!");
+        }
+
+        Ok(Self::from_ptr(root))
+    }
+
+    /// Connects siblings nodes in the graph. This is done by iterating over all nodes and checking
+    /// if they have a sibling. If they do, the sibling is found and an edge is added between the
+    /// two nodes.
+    ///
+    /// This function is relatively slow, as such, the siblings are not connected when the graph is
+    /// built. If you want a graph with connected siblings, call this function after building the
+    /// graph. Note that this will result in a cyclic graph - which may not be what you want.
+    pub fn connect_siblings(&mut self) {
+        let graph = &mut self.graph;
+        let mut nodes = graph.node_indices().collect::<Vec<_>>();
+
+        while let Some(node) = nodes.pop() {
+            let node = graph.node_weight(node).unwrap();
+
+            if let Some(sibling) = node.sibling_uid() {
+                let node = graph.node_indices().find(|n| {
+                    graph.node_weight(*n).unwrap().uid() == node.uid()
+                });
+
+                let sibling = graph.node_indices().find(|n| {
+                    graph.node_weight(*n).unwrap().uid()
+                        == Some(sibling)
+                });
+
+                if let (Some(node), Some(sibling)) = (node, sibling) {
+                    graph.add_edge(node, sibling, ());
+                }
+            }
+        }
+    }
+
+    /// Compares the SASA of the residues in the tree with the SASA of the residues in the
+    /// [`SasaTree`] `subtree`. The comparison is done by applying the function `op` to the
+    /// [`NodeArea`] of the residues in the tree and the [`NodeArea`] of the residues in the
+    /// `subtree`. The result of the comparison is then passed to the function `predicate`, which
+    /// returns a boolean. If the boolean is `true`, the residue is added to the result.
+    ///
+    /// The function `op` should take two [`NodeArea`] references and return a [`NodeArea`]. The function
+    /// `predicate` should take a [`NodeArea`] reference and return a boolean.
+    ///
+    /// The resulting [`NodeArea`] is used to create a new [`Node`] which is added to the result
+    /// [`Vec`].
+    ///
+    pub fn compare_residues(
+        &self,
+        subtree: &SasaTree,
+        op: fn(&NodeArea, &NodeArea) -> NodeArea,
+        predicate: fn(&NodeArea) -> bool,
+    ) -> Vec<Node> {
+        // Get all residue nodes in the tree
+        let nodes = self
+            .graph
+            .node_indices()
+            .filter(|n| {
+                *self.graph.node_weight(*n).unwrap().nodetype()
+                    == NodeType::Residue
+            })
+            .collect::<Vec<_>>();
+
+        let mut result: Vec<Node> = Vec::new();
+
+        for node in nodes {
+            let node = self.graph.node_weight(node).unwrap();
+
+            let subtree_node = subtree
+                .graph
+                .node_indices()
+                .find(|n| {
+                    subtree.graph.node_weight(*n).unwrap().uid()
+                        == node.uid()
+                })
+                .and_then(|n| subtree.graph.node_weight(n));
+
+            if let Some(subtree_node) = subtree_node {
+                let area = op(
+                    node.area().unwrap(),
+                    subtree_node.area().unwrap(),
+                );
+
+                if predicate(&area) {
+                    let mut node = node.clone();
+                    node.set_area(Some(area));
+                    result.push(node);
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Returns a vector of nodes in the graph with the given type.
+    ///
+    /// The nodes are cloned, so the returned vector can be modified without affecting the graph.
+    pub fn get_nodes(&self, nodetype: NodeType) -> Vec<Node> {
+        self.graph
+            .node_indices()
+            .filter(|n| {
+                *self.graph.node_weight(*n).unwrap().nodetype()
+                    == nodetype
+            })
+            .map(|n| self.graph.node_weight(n).unwrap().clone())
+            .collect()
+    }
+
+    /// Recursively add nodes to the graph.
+    ///
+    /// This is used to construct a [`petgraph::Graph`] from a [`freesasa_node`] tree.
+    fn recursive_add_node(
+        graph: &mut petgraph::Graph<Node, ()>,
+        node: &*mut freesasa_node,
+        parent: Option<graph::NodeIndex>,
+    ) {
+        let mut current_node = *node;
+
+        while !current_node.is_null() {
+            // get the current node index
+            let idx = graph.node_indices().count();
+            let idx = graph::NodeIndex::new(idx);
+
+            let node = Node::new_from_node(&current_node, idx);
+
+            let node_index = graph.add_node(node);
+
+            if let Some(parent) = parent {
+                graph.add_edge(parent, node_index, ());
+            }
+
+            let children =
+                unsafe { freesasa_node_children(current_node) };
+
+            if !children.is_null() {
+                Self::recursive_add_node(
+                    graph,
+                    &children,
+                    Some(node_index),
+                );
+            }
+
+            current_node = unsafe { freesasa_node_next(current_node) };
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct SasaTreeNative {
+    root: *mut freesasa_node,
+}
+
+impl SasaTreeNative {
     /// Creates a [`SasaTree`] object from a raw `freesasa_node` pointer
     pub fn new(
         root: *mut freesasa_node,
-    ) -> Result<SasaTree, &'static str> {
+    ) -> Result<SasaTreeNative, &'static str> {
         if root.is_null() {
             return Err("Failed to create FSResultTree, the root node was null!");
         }
-        Ok(SasaTree { root })
+        Ok(SasaTreeNative { root })
     }
 
     pub fn from_result(
         result: &SasaResult,
         structure: &Structure,
-    ) -> Result<SasaTree, &'static str> {
+    ) -> Result<SasaTreeNative, &'static str> {
         let name = str_to_c_string(structure.get_name())?.into_raw();
 
         if structure.is_null() {
@@ -99,7 +274,7 @@ impl SasaTree {
             return Err("Failed to create FSResultTree: freesasa_tree_init returned a null pointer!");
         }
 
-        Ok(SasaTree { root })
+        Ok(SasaTreeNative { root })
     }
 
     /// Returns the differences with this tree and another. Note, it is assumed that the other tree,
@@ -110,14 +285,11 @@ impl SasaTree {
     /// * `predicate` - The function to use to compare the SASA values (fn(current: f64, other: f64) -> bool)
     ///
 
-    pub fn compare_residues<F>(
+    pub fn compare_residues(
         &self,
-        subtree: &SasaTree,
-        predicate: F,
-    ) -> Vec<ResidueUID>
-    where
-        F: FnOnce(f64, f64) -> bool + Copy,
-    {
+        subtree: &SasaTreeNative,
+        predicate: fn(f64, f64) -> bool,
+    ) -> Vec<ResidueUID> {
         // ## For Developers
         // ### Psuedo code:
         // 1. Find the chains which contain differences, push a tuple of which each node pointer to
@@ -160,21 +332,21 @@ impl SasaTree {
         //
         // Space: O(N)
         //
-        let chains = SasaTree::get_raw_node(
+        let chains = SasaTreeNative::get_raw_node(
             &self.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
 
         // Get the second tree's chains
         // Time: O(1)
-        let subtree_chains = SasaTree::get_raw_node(
+        let subtree_chains = SasaTreeNative::get_raw_node(
             &subtree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
 
         // Find the chains which have different SASA values
         // Time: O(m) where m is the number of chains
-        let chain_diffs = SasaTree::predicate_siblings(
+        let chain_diffs = SasaTreeNative::predicate_siblings(
             chains,
             subtree_chains,
             predicate,
@@ -192,18 +364,18 @@ impl SasaTree {
         //                  This is realistically faster than computing all residues which is O(N),
         //                  where N is the total number of residues in the residues in the structure
         for chain in chain_diffs {
-            let chain_id = SasaTree::get_node_name(chain.0);
-            let res_node = SasaTree::get_raw_node(
+            let chain_id = SasaTreeNative::get_node_name(chain.0);
+            let res_node = SasaTreeNative::get_raw_node(
                 &chain.0,
                 freesasa_nodetype_FREESASA_NODE_RESIDUE,
             );
-            let subtree_res_node = SasaTree::get_raw_node(
+            let subtree_res_node = SasaTreeNative::get_raw_node(
                 &chain.1,
                 freesasa_nodetype_FREESASA_NODE_RESIDUE,
             );
             residue_diffs.insert(
                 chain_id,
-                SasaTree::predicate_siblings(
+                SasaTreeNative::predicate_siblings(
                     res_node,
                     subtree_res_node,
                     predicate,
@@ -218,7 +390,7 @@ impl SasaTree {
         let mut output_vector = Vec::new();
         for chain in residue_diffs {
             let i = chain.1.iter().map(|res| -> ResidueUID {
-                let uid = SasaTree::get_node_uid(res.0)
+                let uid = SasaTreeNative::get_node_uid(res.0)
                     .expect("Could not get UID");
                 uid
             });
@@ -228,7 +400,9 @@ impl SasaTree {
         output_vector
     }
 
-    /// Returns the pairs of nodes which have different SASA values.
+    /// Returns the pairs of nodes which match the predicate.
+    ///
+    /// The predicate is a function which takes two SASA area values and returns a boolean.
     ///
     /// The subtree_node must be a valid subtree of the node, meaning that all nodes in subtree_node
     /// must also be present in node, but not necessarily the other way around.
@@ -249,23 +423,23 @@ impl SasaTree {
     ///
     /// ## Space Complexity
     /// O(n) where n is the number of nodes in the tree
-    fn predicate_siblings<F>(
+    fn predicate_siblings(
         node: *mut freesasa_node,
         subtree_node: *mut freesasa_node,
-        predicate: F,
-    ) -> Vec<(*mut freesasa_node, *mut freesasa_node)>
-    where
-        F: FnOnce(f64, f64) -> bool + Copy,
-    {
-        let siblings = SasaTree::get_siblings_as_vector(node, None);
+        predicate: fn(f64, f64) -> bool,
+    ) -> Vec<(*mut freesasa_node, *mut freesasa_node)> {
+        let siblings =
+            SasaTreeNative::get_siblings_as_vector(node, None);
         let subtree_siblings =
-            SasaTree::get_siblings_as_hashmap(subtree_node);
+            SasaTreeNative::get_siblings_as_hashmap(subtree_node);
 
         let mut v = Vec::new();
 
         // Find the chains which have different SASA values
         for sibling in siblings {
-            let residue_uid = match SasaTree::get_node_uid(sibling) {
+            let residue_uid = match SasaTreeNative::get_node_uid(
+                sibling,
+            ) {
                 Ok(uid) => uid,
                 Err(e) => {
                     println!("Error: {:?}", e);
@@ -273,7 +447,7 @@ impl SasaTree {
                     continue;
                 }
             };
-            let area = SasaTree::get_node_area(sibling);
+            let area = SasaTreeNative::get_node_area(sibling);
 
             match subtree_siblings.get(&residue_uid) {
                 Some((subtree_node, subtree_area)) => {
@@ -295,7 +469,7 @@ impl SasaTree {
     ///             moves to this function, and then memory is deallocated.
     pub fn join(
         &self,
-        mut other_tree: SasaTree,
+        mut other_tree: SasaTreeNative,
     ) -> Result<(), &'static str> {
         let code = unsafe {
             freesasa_tree_join(
@@ -344,19 +518,21 @@ impl SasaTree {
             return node;
         }
 
-        SasaTree::get_raw_node(&node, node_type) // Then we go deeper!!!
+        SasaTreeNative::get_raw_node(&node, node_type) // Then we go deeper!!!
     }
 
     /// Makes a HashMap with the node names as the keys, and the values tuples of node pointer
     /// and total SASA area.
     ///
     /// Time: O(n) where n is the number of siblings
-    fn get_siblings_as_hashmap(node: *mut freesasa_node) -> ResidueMap {
+    fn get_siblings_as_hashmap(
+        node: *mut freesasa_node,
+    ) -> ResidueUIDMap {
         let mut node = node;
-        let mut h = ResidueMap::new();
+        let mut h = ResidueUIDMap::new();
         while !node.is_null() {
-            let area = SasaTree::get_node_area(node);
-            let sibling_uid = match SasaTree::get_node_uid(node) {
+            let area = SasaTreeNative::get_node_area(node);
+            let sibling_uid = match SasaTreeNative::get_node_uid(node) {
                 Ok(uid) => uid,
                 Err(_) => {
                     warn!("Could not get residue UID for node: {:?}. Skipping...", node);
@@ -368,7 +544,7 @@ impl SasaTree {
             if h.insert(sibling_uid, (node, area)).is_some() {
                 println!(
                     "WARNING: It appears that multiple siblings have the same name: {:?}",
-                    SasaTree::get_node_uid(node)
+                    SasaTreeNative::get_node_uid(node)
                 );
             }
             node = unsafe { freesasa_node_next(node) };
@@ -415,72 +591,8 @@ impl SasaTree {
     fn get_node_uid(
         node: *mut freesasa_node,
     ) -> Result<ResidueUID, &'static str> {
-        unsafe {
-            if freesasa_node_type(node)
-                == freesasa_nodetype_FREESASA_NODE_CHAIN
-            {
-                let chain = freesasa_node_name(node);
-
-                if chain.is_null() {
-                    return Err("Chain name is null!");
-                }
-
-                let chain = ffi::CStr::from_ptr(chain)
-                    .to_str()
-                    .map_err(|_| "Chain name is not valid UTF-8!")?
-                    .chars()
-                    .nth(0)
-                    .ok_or("Chain name is empty!")?;
-
-                return Ok(ResidueUID(chain, 0, None));
-            } else if freesasa_node_type(node)
-                == freesasa_nodetype_FREESASA_NODE_RESIDUE
-            {
-                let name = freesasa_node_residue_number(node);
-
-                if name.is_null() {
-                    return Err("Residue name is null!");
-                }
-
-                let chain =
-                    freesasa_node_name(freesasa_node_parent(node));
-
-                if chain.is_null() {
-                    return Err("Chain name is null!");
-                }
-
-                let chain = ffi::CStr::from_ptr(chain)
-                    .to_str()
-                    .map_err(|_| "Chain name is not valid UTF-8!")?
-                    .chars()
-                    .nth(0)
-                    .ok_or("Chain name is empty!")?;
-
-                let name = ffi::CStr::from_ptr(name);
-                let mut name = name
-                    .to_str()
-                    .map_err(|_| "Residue name is not valid UTF-8!")?;
-
-                let inscode = {
-                    if name.chars().last().unwrap().is_alphabetic() {
-                        name = &name[..name.len() - 1];
-                        Some(name.chars().last().unwrap())
-                    } else {
-                        None
-                    }
-                };
-
-                let name =
-                    name.trim().parse::<i32>().map_err(|_| {
-                        println!("Residue name:{}", name);
-                        "Residue name is not a number!"
-                    })?;
-
-                Ok(ResidueUID(chain, name, inscode))
-            } else {
-                Err("The node type is not a chain or residue!")
-            }
-        }
+        // TODO
+        todo!()
     }
 
     /// Returns the total area of the node as a f64
@@ -489,7 +601,7 @@ impl SasaTree {
     }
 }
 
-impl Drop for SasaTree {
+impl Drop for SasaTreeNative {
     fn drop(&mut self) {
         unsafe {
             if self.root.is_null() {
@@ -504,14 +616,14 @@ impl Drop for SasaTree {
 }
 
 #[cfg(test)]
-mod tests {
+mod test_native {
     use crate::structure;
 
     use super::*;
 
     #[test]
     fn new() {
-        if SasaTree::new(std::ptr::null_mut()).is_ok() {
+        if SasaTreeNative::new(std::ptr::null_mut()).is_ok() {
             panic!("Created SasaTree with")
         }
     }
@@ -525,11 +637,11 @@ mod tests {
         .unwrap();
         let tree = pdb.calculate_sasa_tree().unwrap();
 
-        let node = SasaTree::get_raw_node(
+        let node = SasaTreeNative::get_raw_node(
             &tree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
-        let name = SasaTree::get_node_name(node);
+        let name = SasaTreeNative::get_node_name(node);
         assert_eq!(name, "A");
     }
 
@@ -542,11 +654,11 @@ mod tests {
         .unwrap();
         let tree = pdb.calculate_sasa_tree().unwrap();
 
-        let node = SasaTree::get_raw_node(
+        let node = SasaTreeNative::get_raw_node(
             &tree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
-        let siblings = SasaTree::get_siblings_as_hashmap(node);
+        let siblings = SasaTreeNative::get_siblings_as_hashmap(node);
 
         assert_eq!(siblings.len(), 1);
     }
@@ -590,15 +702,121 @@ mod tests {
         let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();
 
         println!(
-            "7trr: {} \n7trr_sub: {}",
+            "7trr: {} 7trr_sub: {}",
             sasa_7trr.total, sasa_7trr_sub.total
         );
 
         let diff = tree_7trr
-            .compare_residues(&tree_7trr_sub, |c, o| o - c != 0.0);
+            .compare_residues(&tree_7trr_sub, |c, o| o - c > 0.0);
+
+        println!("Diff: {:?}", diff);
+    }
+}
+
+#[cfg(test)]
+mod test_petgraph {
+    use freesasa_sys::freesasa_calc_tree;
+    use petgraph::dot::{Config, Dot};
+
+    use super::*;
+    use crate::result::node::NodeType;
+    use crate::structure;
+    use crate::structure::DEFAULT_CALCULATION_PARAMETERS;
+
+    #[test]
+    fn from_node() {
+        let pdb_ptr = structure::Structure::from_path(
+            "data/single_chain.pdb",
+            None,
+        )
+        .unwrap();
+
+        let name = pdb_ptr.get_name().to_owned();
+
+        let name = str_to_c_string(&name).unwrap().into_raw();
+        let root = unsafe {
+            freesasa_calc_tree(
+                pdb_ptr.as_const_ptr(),
+                DEFAULT_CALCULATION_PARAMETERS,
+                name,
+            )
+        };
+
+        println!(
+            "Root: {:?}",
+            NodeType::from_fs_level(unsafe {
+                freesasa_node_type(root)
+            })
+        );
+
+        // Retake CString ownership
+        free_raw_c_strings!(name);
+
+        let mut tree = SasaTree::from_ptr(root);
+
+        let current_time_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        tree.connect_siblings();
+        let elapsed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis()
+            - current_time_ms;
+        println!("Elapsed: {}ms", elapsed);
+
+        // write the dot file to disk
+        let dot = Dot::with_config(
+            &tree.graph,
+            &[Config::EdgeNoLabel, Config::NodeNoLabel],
+        );
+        let dot = format!("{:?}", dot);
+        std::fs::write("tree.dot", dot).unwrap();
+    }
+
+    #[test]
+    fn compare_residues() {
+        let pdb =
+            structure::Structure::from_path("data/7trr.pdb", None)
+                .unwrap();
+
+        let sub_pdb = structure::Structure::from_path(
+            "data/7trr_gap_141_156_inc.pdb",
+            None,
+        )
+        .unwrap();
+
+        let name = str_to_c_string(pdb.get_name()).unwrap().into_raw();
+        let root = unsafe {
+            freesasa_calc_tree(
+                pdb.as_const_ptr(),
+                DEFAULT_CALCULATION_PARAMETERS,
+                name,
+            )
+        };
+
+        let name =
+            str_to_c_string(sub_pdb.get_name()).unwrap().into_raw();
+        let root_sub = unsafe {
+            freesasa_calc_tree(
+                sub_pdb.as_const_ptr(),
+                DEFAULT_CALCULATION_PARAMETERS,
+                name,
+            )
+        };
+
+        let tree = SasaTree::from_ptr(root);
+        let sub_tree = SasaTree::from_ptr(root_sub);
+
+        let diff = tree.compare_residues(
+            &sub_tree,
+            |c, o| o - c,
+            |a| a.total() > 0.0,
+        );
 
         for uid in diff {
-            println!("{}", uid);
+            println!("{:?}", uid);
         }
     }
 }

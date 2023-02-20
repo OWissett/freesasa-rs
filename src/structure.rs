@@ -11,13 +11,14 @@ use freesasa_sys::{
     freesasa_structure_from_pdb, freesasa_structure_new,
 };
 
-use crate::result::{SasaResult, SasaTree};
+use crate::result::{SasaResult, SasaTreeNative};
 
 /// Set the default behaviour for PDB loading
-const DEFAULT_STRUCTURE_OPTIONS: raw::c_int = 0 as raw::c_int;
+pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
+    0 as raw::c_int;
 
-const DEFAULT_CALCULATION_PARAMETERS: *const freesasa_parameters =
-    ptr::null();
+pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
+    *const freesasa_parameters = ptr::null();
 
 /// Simple Rust struct wrapper for freesasa_structure object.
 ///
@@ -247,7 +248,7 @@ impl Structure {
     /// Calculates the SASA value as a tree using the default parameters
     pub fn calculate_sasa_tree(
         &self,
-    ) -> Result<SasaTree, &'static str> {
+    ) -> Result<SasaTreeNative, &'static str> {
         let name = str_to_c_string(&self.name)?.into_raw();
         let root = unsafe {
             freesasa_calc_tree(
@@ -258,15 +259,13 @@ impl Structure {
         };
 
         // Retake CString ownership
-        unsafe {
-            let _ = ffi::CString::from_raw(name);
-        }
+        free_raw_c_strings!(name);
 
         if root.is_null() {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        SasaTree::new(root)
+        SasaTreeNative::new(root)
     }
 
     /// Returns a string slice to the name of the structure
