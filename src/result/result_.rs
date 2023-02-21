@@ -96,7 +96,7 @@ impl SasaResult {
             return None;
         }
 
-        Some(unsafe { *self.sasa_ptr.offset(index as isize) })
+        Some(unsafe { *self.sasa_ptr.add(index) })
     }
 }
 
@@ -130,9 +130,7 @@ impl<'a> Iterator for SasaResultIter<'a> {
             return None;
         }
 
-        let value = unsafe {
-            *self.result.sasa_ptr.offset(self.index as isize)
-        };
+        let value = unsafe { *self.result.sasa_ptr.add(self.index) };
         self.index += 1;
         Some(value)
     }

@@ -8,7 +8,7 @@ use freesasa_sys::{
     freesasa_node_parent, freesasa_node_residue_n_atoms,
     freesasa_node_residue_number, freesasa_node_structure_chain_labels,
     freesasa_node_structure_model, freesasa_node_structure_n_atoms,
-    freesasa_node_structure_n_chains, freesasa_parameters,
+    freesasa_node_structure_n_chains,
 };
 
 use crate::utils::assert_nodetype;
