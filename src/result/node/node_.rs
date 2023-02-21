@@ -22,7 +22,6 @@ use freesasa_sys::{
     freesasa_nodetype_FREESASA_NODE_ROOT as FREESASA_NODE_ROOT,
     freesasa_nodetype_FREESASA_NODE_STRUCTURE as FREESASA_NODE_STRUCTURE,
 };
-use petgraph::prelude;
 
 use crate::{
     uids::{AtomUID, ChainUID, NodeUID, ResidueUID},
@@ -256,7 +255,6 @@ pub struct Node {
     uid: Option<NodeUID>,
     nodetype: NodeType,
     sibling_uid: Option<NodeUID>,
-    index: prelude::NodeIndex,
 }
 
 impl Node {
@@ -266,7 +264,6 @@ impl Node {
         uid: Option<NodeUID>,
         nodetype: NodeType,
         sibling_uid: Option<NodeUID>,
-        index: prelude::NodeIndex,
     ) -> Self {
         Self {
             properties,
@@ -274,32 +271,27 @@ impl Node {
             uid,
             nodetype,
             sibling_uid,
-            index,
         }
     }
 
-    pub(crate) fn new_from_node(
-        node: &*mut freesasa_node,
-        index: prelude::NodeIndex,
-    ) -> Self {
+    pub(crate) fn new_from_node(node: &*mut freesasa_node) -> Self {
         let nodetype = NodeType::from_fs_level(unsafe {
             freesasa_node_type(*node)
         });
 
         match nodetype {
-            NodeType::Atom => new_atom_node(node, index),
-            NodeType::Residue => new_residue_node(node, index),
-            NodeType::Chain => new_chain_node(node, index),
-            NodeType::Structure => new_structure_node(node, index),
+            NodeType::Atom => new_atom_node(node),
+            NodeType::Residue => new_residue_node(node),
+            NodeType::Chain => new_chain_node(node),
+            NodeType::Structure => new_structure_node(node),
             NodeType::Root => Node {
                 properties: None,
                 area: None,
                 uid: None,
                 nodetype: NodeType::Root,
                 sibling_uid: None,
-                index,
             },
-            NodeType::Result => new_result_node(node, index),
+            NodeType::Result => new_result_node(node),
             _ => panic!("Invalid node type: {:?}", nodetype),
         }
     }
@@ -316,16 +308,16 @@ impl Node {
         self.uid.as_ref()
     }
 
+    pub fn take_uid(&mut self) -> Option<NodeUID> {
+        self.uid.take()
+    }
+
     pub fn nodetype(&self) -> &NodeType {
         &self.nodetype
     }
 
     pub fn sibling_uid(&self) -> Option<&NodeUID> {
         self.sibling_uid.as_ref()
-    }
-
-    pub fn index(&self) -> prelude::NodeIndex {
-        self.index
     }
 
     pub fn set_area(&mut self, area: Option<NodeArea>) {
@@ -338,10 +330,7 @@ impl Node {
 ///
 /// # Panics
 /// If the node type is not an atom.
-fn new_atom_node(
-    node: &*mut freesasa_node,
-    index: prelude::NodeIndex,
-) -> Node {
+fn new_atom_node(node: &*mut freesasa_node) -> Node {
     assert_nodetype(node, NodeType::Atom);
 
     let properties = AtomProperties::new(node);
@@ -381,7 +370,6 @@ fn new_atom_node(
         uid: Some(uid),
         nodetype: NodeType::Atom,
         sibling_uid,
-        index,
     }
 }
 
@@ -390,10 +378,7 @@ fn new_atom_node(
 ///
 /// # Panics
 /// If the node type is not a residue.
-fn new_residue_node(
-    node: &*mut freesasa_node,
-    index: prelude::NodeIndex,
-) -> Node {
+fn new_residue_node(node: &*mut freesasa_node) -> Node {
     assert_nodetype(node, NodeType::Residue);
 
     let properties = ResidueProperties::new(node);
@@ -427,7 +412,6 @@ fn new_residue_node(
         uid: Some(uid),
         nodetype: NodeType::Residue,
         sibling_uid,
-        index,
     }
 }
 
@@ -436,10 +420,7 @@ fn new_residue_node(
 ///
 /// # Panics
 /// If the node type is not a chain.
-fn new_chain_node(
-    node: &*mut freesasa_node,
-    index: prelude::NodeIndex,
-) -> Node {
+fn new_chain_node(node: &*mut freesasa_node) -> Node {
     assert_nodetype(node, NodeType::Chain);
 
     let properties = ChainProperties::new(node);
@@ -469,7 +450,6 @@ fn new_chain_node(
         uid: Some(uid),
         nodetype: NodeType::Chain,
         sibling_uid,
-        index,
     }
 }
 
@@ -478,10 +458,7 @@ fn new_chain_node(
 ///
 /// # Panics
 /// If the node type is not a structure.
-fn new_structure_node(
-    node: &*mut freesasa_node,
-    index: prelude::NodeIndex,
-) -> Node {
+fn new_structure_node(node: &*mut freesasa_node) -> Node {
     assert_nodetype(node, NodeType::Structure);
 
     let properties = StructureProperties::new(node);
@@ -505,14 +482,10 @@ fn new_structure_node(
         uid: Some(uid),
         nodetype: NodeType::Structure,
         sibling_uid,
-        index,
     }
 }
 
-fn new_result_node(
-    node: &*mut freesasa_node,
-    index: prelude::NodeIndex,
-) -> Node {
+fn new_result_node(node: &*mut freesasa_node) -> Node {
     assert_nodetype(node, NodeType::Result);
 
     let properties = ResultProperties::new(node);
@@ -523,6 +496,5 @@ fn new_result_node(
         uid: None,
         nodetype: NodeType::Result,
         sibling_uid: None,
-        index,
     }
 }

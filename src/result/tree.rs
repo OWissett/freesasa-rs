@@ -1,13 +1,11 @@
 use std::fmt::Debug;
-use std::ops::Index;
 use std::{collections::HashMap, ffi, ptr};
 
 use freesasa_sys::{
     freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_error_codes_FREESASA_WARN, freesasa_node,
     freesasa_node_area, freesasa_node_children, freesasa_node_free,
-    freesasa_node_name, freesasa_node_next, freesasa_node_parent,
-    freesasa_node_residue_number, freesasa_node_type,
+    freesasa_node_name, freesasa_node_next, freesasa_node_type,
     freesasa_nodetype, freesasa_nodetype_FREESASA_NODE_CHAIN,
     freesasa_nodetype_FREESASA_NODE_RESIDUE, freesasa_tree_init,
     freesasa_tree_join,
@@ -139,32 +137,56 @@ impl SasaTree {
                 *self.graph.node_weight(*n).unwrap().nodetype()
                     == NodeType::Residue
             })
+            .map(|n| {
+                let node = self.graph.node_weight(n).unwrap();
+                let uid = node.uid().unwrap();
+                (uid, node)
+            })
+            .collect::<HashMap<_, _>>();
+
+        let subtree_nodes = subtree
+            .graph
+            .node_indices()
+            .filter(|n| {
+                *subtree.graph.node_weight(*n).unwrap().nodetype()
+                    == NodeType::Residue
+            })
+            .map(|n| {
+                (self.graph.node_weight(n).unwrap().uid().unwrap(), n)
+            })
             .collect::<Vec<_>>();
 
         let mut result: Vec<Node> = Vec::new();
 
-        for node in nodes {
-            let node = self.graph.node_weight(node).unwrap();
+        for (uid, nidx) in subtree_nodes {
+            // get the node in the tree with the same uid as the node in the subtree
+            let node = nodes.get(&uid);
 
-            let subtree_node = subtree
-                .graph
-                .node_indices()
-                .find(|n| {
-                    subtree.graph.node_weight(*n).unwrap().uid()
-                        == node.uid()
-                })
-                .and_then(|n| subtree.graph.node_weight(n));
+            match node {
+                Some(n) => {
+                    let node = *n;
+                    let subtree_node =
+                        subtree.graph.node_weight(nidx).unwrap();
 
-            if let Some(subtree_node) = subtree_node {
-                let area = op(
-                    node.area().unwrap(),
-                    subtree_node.area().unwrap(),
-                );
+                    let area = op(
+                        node.area().unwrap(),
+                        subtree_node.area().unwrap(),
+                    );
 
-                if predicate(&area) {
-                    let mut node = node.clone();
-                    node.set_area(Some(area));
-                    result.push(node);
+                    // check if the predicate is true with the result
+                    if predicate(&area) {
+                        // create a new node with the new area
+                        let mut node = node.clone();
+                        node.set_area(Some(area));
+                        result.push(node);
+                    }
+                }
+                None => {
+                    warn!(
+                        "Residue with uid {} not found in tree!",
+                        uid
+                    );
+                    continue;
                 }
             }
         }
@@ -197,11 +219,7 @@ impl SasaTree {
         let mut current_node = *node;
 
         while !current_node.is_null() {
-            // get the current node index
-            let idx = graph.node_indices().count();
-            let idx = graph::NodeIndex::new(idx);
-
-            let node = Node::new_from_node(&current_node, idx);
+            let node = Node::new_from_node(&current_node);
 
             let node_index = graph.add_node(node);
 
@@ -393,7 +411,10 @@ impl SasaTreeNative {
             let i = chain.1.iter().map(|res| -> ResidueUID {
                 let uid = SasaTreeNative::get_node_uid(res.0)
                     .expect("Could not get UID");
-                uid
+                match uid {
+                    NodeUID::Residue(ruid) => ruid,
+                    _ => panic!("UID was not a residue"),
+                }
             });
             output_vector.extend(i);
         }
@@ -441,7 +462,13 @@ impl SasaTreeNative {
             let residue_uid = match SasaTreeNative::get_node_uid(
                 sibling,
             ) {
-                Ok(uid) => uid,
+                Ok(uid) => match uid {
+                    NodeUID::Residue(ruid) => ruid,
+                    _ => {
+                        warn!("UID was not a residue. Skipping...");
+                        continue;
+                    }
+                },
                 Err(e) => {
                     println!("Error: {:?}", e);
                     warn!("Could not get residue UID for node: {:?}. Skipping...", sibling);
@@ -534,7 +561,14 @@ impl SasaTreeNative {
         while !node.is_null() {
             let area = SasaTreeNative::get_node_area(node);
             let sibling_uid = match SasaTreeNative::get_node_uid(node) {
-                Ok(uid) => uid,
+                Ok(uid) => match uid {
+                    NodeUID::Residue(ruid) => ruid,
+                    _ => {
+                        warn!("UID was not a residue. Skipping...");
+                        node = unsafe { freesasa_node_next(node) };
+                        continue;
+                    }
+                },
                 Err(_) => {
                     warn!("Could not get residue UID for node: {:?}. Skipping...", node);
 
@@ -589,10 +623,15 @@ impl SasaTreeNative {
         String::from(name)
     }
 
+    /// Return a clone of the node's UID
     fn get_node_uid(
         node: *mut freesasa_node,
-    ) -> Result<ResidueUID, &'static str> {
-        todo!()
+    ) -> Result<NodeUID, &'static str> {
+        let uid = Node::new_from_node(&node).take_uid();
+        match uid {
+            Some(uid) => Ok(uid),
+            None => Err("Could not get UID for node!"),
+        }
     }
 
     /// Returns the total area of the node as a f64

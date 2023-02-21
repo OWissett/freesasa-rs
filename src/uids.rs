@@ -102,6 +102,17 @@ pub enum NodeUID {
 // Display Implementation //
 // ---------------------- //
 
+impl Display for NodeUID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeUID::Atom(atom) => write!(f, "{}", atom),
+            NodeUID::Residue(residue) => write!(f, "{}", residue),
+            NodeUID::Chain(chain) => write!(f, "{}", chain),
+            NodeUID::Structure(structure) => write!(f, "{}", structure),
+        }
+    }
+}
+
 impl Display for AtomUID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.residue.inscode {
