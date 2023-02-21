@@ -183,8 +183,8 @@ mod tests {
         .unwrap();
 
         let result = structure.calculate_sasa().unwrap();
-        let sasa = result.iter().collect::<Vec<f64>>();
-        assert_eq!(sasa.len(), 1911);
+
+        assert_eq!(result.iter().count(), 1911);
 
         let sasa = result.iter().sum::<f64>();
         assert_eq!(sasa, result.total);
