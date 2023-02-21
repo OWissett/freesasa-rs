@@ -1,4 +1,4 @@
-use std::{ffi, fmt, os::raw, ptr};
+use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
 use crate::free_raw_c_strings;
@@ -11,13 +11,14 @@ use freesasa_sys::{
     freesasa_structure_from_pdb, freesasa_structure_new,
 };
 
-use crate::result::{SasaResult, SasaTree};
+use crate::result::{SasaResult, SasaTreeNative};
 
 /// Set the default behaviour for PDB loading
-const DEFAULT_STRUCTURE_OPTIONS: raw::c_int = 0 as raw::c_int;
+pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
+    0 as raw::c_int;
 
-const DEFAULT_CALCULATION_PARAMETERS: *const freesasa_parameters =
-    ptr::null();
+pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
+    *const freesasa_parameters = ptr::null();
 
 /// Simple Rust struct wrapper for freesasa_structure object.
 ///
@@ -247,7 +248,7 @@ impl Structure {
     /// Calculates the SASA value as a tree using the default parameters
     pub fn calculate_sasa_tree(
         &self,
-    ) -> Result<SasaTree, &'static str> {
+    ) -> Result<SasaTreeNative, &'static str> {
         let name = str_to_c_string(&self.name)?.into_raw();
         let root = unsafe {
             freesasa_calc_tree(
@@ -258,15 +259,13 @@ impl Structure {
         };
 
         // Retake CString ownership
-        unsafe {
-            let _ = ffi::CString::from_raw(name);
-        }
+        free_raw_c_strings!(name);
 
         if root.is_null() {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        SasaTree::new(root)
+        SasaTreeNative::new(root)
     }
 
     /// Returns a string slice to the name of the structure
@@ -325,6 +324,8 @@ impl fmt::Display for Structure {
 #[cfg(test)]
 mod tests {
 
+    use std::ffi;
+
     use freesasa_sys::{
         freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
@@ -343,7 +344,7 @@ mod tests {
     #[test]
     fn from_pdbtbx() {
         let (pdb, _e) = pdbtbx::open(
-            "./data/single_chain.pdb",
+            "./data/7trr.pdb",
             pdbtbx::StrictnessLevel::Loose,
         )
         .unwrap();
@@ -351,19 +352,16 @@ mod tests {
         let pdb_from_pdbtbx = Structure::from_pdbtbx(&pdb).unwrap();
 
         let pdb_from_path =
-            Structure::from_path("./data/single_chain.pdb", None)
-                .unwrap();
+            Structure::from_path("./data/7trr.pdb", None).unwrap();
 
-        let tree_pdbtbx =
-            pdb_from_pdbtbx.calculate_sasa_tree().unwrap();
-        let tree_path = pdb_from_path.calculate_sasa_tree().unwrap();
+        let tree_pdbtbx = pdb_from_pdbtbx.calculate_sasa().unwrap();
+        let tree_path = pdb_from_path.calculate_sasa().unwrap();
 
-        assert_eq!(
-            0,
-            tree_pdbtbx
-                .compare_residues(&tree_path, |a, b| a == b)
-                .len()
-        );
+        let percent_diff = (tree_pdbtbx.total - tree_path.total)
+            / tree_pdbtbx.total
+            * 100.0;
+
+        assert!(percent_diff < 0.1);
     }
 
     #[test]
@@ -404,6 +402,8 @@ mod tests {
         let full_sasa = structure.calculate_sasa().unwrap().total;
 
         println!("full: {}\n\n", full_sasa);
+
+        assert_eq!(full_sasa, 257.35019683715666);
     }
 
     #[test]

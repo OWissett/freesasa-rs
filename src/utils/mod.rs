@@ -12,6 +12,10 @@
 ///
 use std::{ffi, os::raw};
 
+use freesasa_sys::{freesasa_node, freesasa_node_type};
+
+use crate::result::node::NodeType;
+
 pub(crate) mod macros;
 
 pub(crate) fn char_to_c_char(
@@ -31,5 +35,28 @@ pub(crate) fn str_to_c_string(
     match ffi::CString::new(_str) {
         Ok(_str) => Ok(_str),
         Err(_) => Err("Failed to cast str to CString: NulError"),
+    }
+}
+
+/// Checks that a pointer to a [`freesasa_node`] is not null, and that the node
+/// is of the correct type.
+///
+/// Panics if the node is not of the correct type.
+pub(crate) fn assert_nodetype(
+    node: &*mut freesasa_node,
+    nodetype: NodeType,
+) {
+    if node.is_null() {
+        panic!("Node pointer is null");
+    }
+
+    if unsafe { freesasa_node_type(*node) } != nodetype.to_fs_level() {
+        panic!(
+            "Node is not of the correct type: expected {:?}, got {:?}",
+            nodetype,
+            NodeType::from_fs_level(unsafe {
+                freesasa_node_type(*node)
+            })
+        );
     }
 }

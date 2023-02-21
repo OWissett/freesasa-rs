@@ -2,8 +2,8 @@ variables:
   IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
 
 stages:
-  - build
-  - doc
+  - Build
+  - Doc
 
 # Cache the rustup toolchain so that we don't
 # have to download it every time
@@ -19,9 +19,6 @@ rust-latest:
   script:
     - cargo build --verbose
     - cargo test --verbose
-  artifacts:
-    paths:
-      - ./target/debug/sprintx
 
 rust-latest-release:
   stage: Build
@@ -29,9 +26,6 @@ rust-latest-release:
   script:
     - cargo build --release --verbose
     - cargo test --release --verbose
-  artifacts:
-    paths:
-      - ./target/release/sprintx
   only:
     - main
     - dev
