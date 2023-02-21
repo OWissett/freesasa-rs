@@ -1,4 +1,4 @@
-use std::{ffi, fmt, os::raw, ptr};
+use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
 use crate::free_raw_c_strings;
@@ -323,6 +323,8 @@ impl fmt::Display for Structure {
 
 #[cfg(test)]
 mod tests {
+
+    use std::ffi;
 
     use freesasa_sys::{
         freesasa_structure_chain_labels, freesasa_structure_get_chains,
