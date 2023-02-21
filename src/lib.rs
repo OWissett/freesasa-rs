@@ -17,7 +17,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use rust_sasa::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
+//! use freesasa_rs::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
 //!
 //! // Set the verbosity of the freesasa library
 //! set_fs_verbosity(FreesasaVerbosity::Info);
