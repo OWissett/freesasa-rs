@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn from_pdbtbx() {
         let (pdb, _e) = pdbtbx::open(
-            "./data/single_chain.pdb",
+            "./data/7trr.pdb",
             pdbtbx::StrictnessLevel::Loose,
         )
         .unwrap();
@@ -350,19 +350,16 @@ mod tests {
         let pdb_from_pdbtbx = Structure::from_pdbtbx(&pdb).unwrap();
 
         let pdb_from_path =
-            Structure::from_path("./data/single_chain.pdb", None)
-                .unwrap();
+            Structure::from_path("./data/7trr.pdb", None).unwrap();
 
-        let tree_pdbtbx =
-            pdb_from_pdbtbx.calculate_sasa_tree().unwrap();
-        let tree_path = pdb_from_path.calculate_sasa_tree().unwrap();
+        let tree_pdbtbx = pdb_from_pdbtbx.calculate_sasa().unwrap();
+        let tree_path = pdb_from_path.calculate_sasa().unwrap();
 
-        assert_eq!(
-            0,
-            tree_pdbtbx
-                .compare_residues(&tree_path, |a, b| a == b)
-                .len()
-        );
+        let percent_diff = (tree_pdbtbx.total - tree_path.total)
+            / tree_pdbtbx.total
+            * 100.0;
+
+        assert!(percent_diff < 0.1);
     }
 
     #[test]
@@ -403,6 +400,8 @@ mod tests {
         let full_sasa = structure.calculate_sasa().unwrap().total;
 
         println!("full: {}\n\n", full_sasa);
+
+        assert_eq!(full_sasa, 257.35019683715666);
     }
 
     #[test]

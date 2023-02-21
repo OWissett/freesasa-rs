@@ -230,6 +230,7 @@ pub struct SasaTreeNative {
     root: *mut freesasa_node,
 }
 
+// TODO: Remove this, once the SasaTree is fully implemented
 impl SasaTreeNative {
     /// Creates a [`SasaTree`] object from a raw `freesasa_node` pointer
     pub fn new(
@@ -591,7 +592,6 @@ impl SasaTreeNative {
     fn get_node_uid(
         node: *mut freesasa_node,
     ) -> Result<ResidueUID, &'static str> {
-        // TODO
         todo!()
     }
 

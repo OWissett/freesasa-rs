@@ -15,6 +15,10 @@ use crate::utils::assert_nodetype;
 
 use super::NodeType;
 
+// TODO Use references to parents propeties, save memorys
+// maybe use shared pointers and some sort of hash map
+// to keep track of the parents
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AtomProperties {
     pub is_polar: bool,             // Polar
