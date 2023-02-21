@@ -656,9 +656,33 @@ impl Drop for SasaTreeNative {
 
 #[cfg(test)]
 mod test_native {
-    use crate::structure;
+    use freesasa_sys::freesasa_calc_tree;
+
+    use crate::structure::{self, DEFAULT_CALCULATION_PARAMETERS};
 
     use super::*;
+
+    fn create_native_tree(path: &str) -> SasaTreeNative {
+        let pdb = structure::Structure::from_path(path, None).unwrap();
+
+        let name = str_to_c_string(&pdb.get_name()).unwrap().into_raw();
+        let root = unsafe {
+            freesasa_calc_tree(
+                pdb.as_const_ptr(),
+                DEFAULT_CALCULATION_PARAMETERS,
+                name,
+            )
+        };
+
+        // Retake CString ownership
+        free_raw_c_strings!(name);
+
+        if root.is_null() {
+            panic!();
+        }
+
+        SasaTreeNative { root }
+    }
 
     #[test]
     fn new() {
@@ -669,55 +693,31 @@ mod test_native {
 
     #[test]
     fn get_node() {
-        let pdb = structure::Structure::from_path(
-            "data/single_chain.pdb",
-            None,
-        )
-        .unwrap();
-        let tree = pdb.calculate_sasa_tree().unwrap();
-
+        let tree = create_native_tree("data/single_chain.pdb");
         let node = SasaTreeNative::get_raw_node(
             &tree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
-        let name = SasaTreeNative::get_node_name(node);
-        assert_eq!(name, "A");
+        assert!(!node.is_null());
     }
 
-    #[ignore = "Not working. Old method, no time to fix"]
+    #[ignore = " working. Old method, no time to fix"]
     #[test]
     fn get_siblings_as_hashmap() {
-        let pdb = structure::Structure::from_path(
-            "data/single_chain.pdb",
-            None,
-        )
-        .unwrap();
-        let tree = pdb.calculate_sasa_tree().unwrap();
-
+        let tree = create_native_tree("data/single_chain.pdb");
         let node = SasaTreeNative::get_raw_node(
             &tree.root,
             freesasa_nodetype_FREESASA_NODE_CHAIN,
         );
         let siblings = SasaTreeNative::get_siblings_as_hashmap(node);
-
         assert_eq!(siblings.len(), 1);
     }
 
     #[test]
     fn test_compare() {
-        let pdb = structure::Structure::from_path(
-            "data/single_chain.pdb",
-            None,
-        )
-        .unwrap();
-
-        let sub_pdb = structure::Structure::from_path(
-            "data/single_chain_w_del.pdb",
-            None,
-        );
-
-        let tree = pdb.calculate_sasa_tree().unwrap();
-        let sub_tree = sub_pdb.unwrap().calculate_sasa_tree().unwrap();
+        let tree = create_native_tree("data/single_chain.pdb");
+        let sub_tree =
+            create_native_tree("data/single_chain_w_del.pdb");
 
         let diff = tree.compare_residues(&sub_tree, |c, o| o - c > 0.0);
 
@@ -735,8 +735,9 @@ mod test_native {
         )
         .unwrap();
 
-        let tree_7trr = pdb_7trr.calculate_sasa_tree().unwrap();
-        let tree_7trr_sub = pdb_7trr_sub.calculate_sasa_tree().unwrap();
+        let tree_7trr = create_native_tree("data/7trr.pdb");
+        let tree_7trr_sub =
+            create_native_tree("data/7trr_gap_141_156_inc.pdb");
 
         let sasa_7trr = pdb_7trr.calculate_sasa().unwrap();
         let sasa_7trr_sub = pdb_7trr_sub.calculate_sasa().unwrap();

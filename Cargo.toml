@@ -22,3 +22,6 @@ criterion = "0.4"
 [[bench]]
 name = "my_benchmark"
 harness = false
+
+[features]
+unsafe-ops = []

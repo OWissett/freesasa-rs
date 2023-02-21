@@ -67,13 +67,25 @@ impl SasaResult {
     }
 
     /// Returns a mutable pointer to the underlying C-API object
+    #[cfg(not(feature = "unsafe-ops"))]
     #[allow(dead_code)]
     pub(crate) fn as_ptr(&self) -> *mut freesasa_result {
         self.ptr
     }
 
+    #[cfg(feature = "unsafe-ops")]
+    pub fn as_ptr(&self) -> *mut freesasa_result {
+        self.ptr
+    }
+
     /// Returns a const pointer to the underlying C-API object
+    #[cfg(not(feature = "unsafe-ops"))]
     pub(crate) fn as_const_ptr(&self) -> *const freesasa_result {
+        self.ptr as *const freesasa_result
+    }
+
+    #[cfg(feature = "unsafe-ops")]
+    pub fn as_const_ptr(&self) -> *const freesasa_result {
         self.ptr as *const freesasa_result
     }
 

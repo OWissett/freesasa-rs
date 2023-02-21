@@ -11,7 +11,7 @@ use freesasa_sys::{
     freesasa_structure_from_pdb, freesasa_structure_new,
 };
 
-use crate::result::{SasaResult, SasaTreeNative};
+use crate::result::{SasaResult, SasaTree};
 
 /// Set the default behaviour for PDB loading
 pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
@@ -28,6 +28,9 @@ pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
 /// When creating an empty structure, you need
 /// to then add atoms to it using `.add_atoms()` before attempting
 /// to calculate the SASA.
+///
+/// To access the raw pointer to the C-API freesasa_structure object,
+/// the `unsafe-ops` feature needs to be enabled.
 #[derive(Debug)]
 pub struct Structure {
     /// Raw pointer to the C-API freesasa_structure object.
@@ -248,7 +251,7 @@ impl Structure {
     /// Calculates the SASA value as a tree using the default parameters
     pub fn calculate_sasa_tree(
         &self,
-    ) -> Result<SasaTreeNative, &'static str> {
+    ) -> Result<SasaTree, &'static str> {
         let name = str_to_c_string(&self.name)?.into_raw();
         let root = unsafe {
             freesasa_calc_tree(
@@ -265,7 +268,7 @@ impl Structure {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        SasaTreeNative::new(root)
+        Ok(SasaTree::from_ptr(root))
     }
 
     /// Returns a string slice to the name of the structure
@@ -277,9 +280,9 @@ impl Structure {
         self.ptr.is_null()
     }
 
-    // ---------------- //
-    // Internal Methods //
-    // ---------------- //
+    // --------------- //
+    // Pointer Methods //
+    // --------------- //
 
     /// Returns the underlying pointer to the freesasa_structure C object.
     ///
@@ -289,12 +292,24 @@ impl Structure {
     /// If this pointer is deallocated early, you will get undefined behaviour since
     /// Drop will attempt to free the same memory (e.g. double free) when this FSStructure
     /// object is destroyed.
+    #[cfg(not(feature = "unsafe-ops"))]
     #[allow(dead_code)]
     pub(crate) fn as_ptr(&self) -> *mut freesasa_structure {
         self.ptr
     }
 
+    #[cfg(feature = "unsafe-ops")]
+    pub fn as_ptr(&self) -> *mut freesasa_structure {
+        self.ptr
+    }
+
+    #[cfg(not(feature = "unsafe-ops"))]
     pub(crate) fn as_const_ptr(&self) -> *const freesasa_structure {
+        self.ptr as *const freesasa_structure
+    }
+
+    #[cfg(feature = "unsafe-ops")]
+    pub fn as_const_ptr(&self) -> *const freesasa_structure {
         self.ptr as *const freesasa_structure
     }
 }
