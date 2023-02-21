@@ -1,7 +1,7 @@
 use criterion::{
     black_box, criterion_group, criterion_main, Criterion,
 };
-use rust_sasa::{result::*, set_fs_verbosity, structure::Structure};
+use freesasa_rs::{result::*, set_fs_verbosity, structure::Structure};
 
 fn load_structure() {
     let pdb_path = "./data/single_chain.pdb";
