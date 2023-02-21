@@ -123,12 +123,16 @@ impl SasaTree {
     /// The resulting [`NodeArea`] is used to create a new [`Node`] which is added to the result
     /// [`Vec`].
     ///
-    pub fn compare_residues(
+    pub fn compare_residues<O, P>(
         &self,
         subtree: &SasaTree,
-        op: fn(&NodeArea, &NodeArea) -> NodeArea,
-        predicate: fn(&NodeArea) -> bool,
-    ) -> Vec<Node> {
+        op: O,
+        predicate: P,
+    ) -> Vec<Node>
+    where
+        O: FnOnce(&NodeArea, &NodeArea) -> NodeArea + Copy,
+        P: FnOnce(&NodeArea) -> bool + Copy,
+    {
         // Get all residue nodes in the tree
         let nodes = self
             .graph
@@ -206,6 +210,11 @@ impl SasaTree {
             })
             .map(|n| self.graph.node_weight(n).unwrap().clone())
             .collect()
+    }
+
+    /// Returns a reference to the underlying [`petgraph::Graph`].
+    pub fn get_graph(&self) -> &petgraph::Graph<Node, ()> {
+        &self.graph
     }
 
     /// Recursively add nodes to the graph.
