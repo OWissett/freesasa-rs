@@ -82,6 +82,14 @@ impl ChainUID {
             structure: structure.to_owned(),
         }
     }
+
+    pub fn chain(&self) -> char {
+        self.chain
+    }
+
+    pub fn structure(&self) -> &str {
+        &self.structure
+    }
 }
 
 // ----- //
