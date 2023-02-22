@@ -184,11 +184,13 @@ impl ChainProperties {
                 name.to_bytes()[0] as char
             },
             structure: unsafe {
-                let parent = freesasa_node_parent(*node);
-                if parent.is_null() {
+                let structure_ptr = freesasa_node_parent(*node);
+                assert_nodetype(&structure_ptr, NodeType::Structure);
+
+                if structure_ptr.is_null() {
                     panic!("Invalid parent node");
                 }
-                let name = freesasa_node_name(parent);
+                let name = freesasa_node_name(structure_ptr);
                 if name.is_null() {
                     panic!("Invalid structure name");
                 }
