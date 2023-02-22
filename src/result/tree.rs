@@ -31,10 +31,13 @@ impl SasaTree {
     ///
     /// This function is unsafe, as it takes a raw pointer to a [`freesasa_node`]. This pointer is
     /// freed after the tree is built.
-    pub(crate) fn from_ptr(node: *mut freesasa_node) -> Self {
+    pub(crate) fn from_ptr(
+        node: *mut freesasa_node,
+        depth: &NodeType,
+    ) -> Self {
         let mut graph = petgraph::Graph::<Node, ()>::new();
 
-        Self::recursive_add_node(&mut graph, &node, None);
+        Self::recursive_add_node(&mut graph, &node, None, depth);
 
         unsafe {
             freesasa_node_free(node);
@@ -47,6 +50,7 @@ impl SasaTree {
     pub fn from_result(
         result: &SasaResult,
         structure: &Structure,
+        depth: &NodeType,
     ) -> Result<Self, &'static str> {
         let name = str_to_c_string(structure.get_name())?.into_raw();
 
@@ -77,7 +81,7 @@ impl SasaTree {
             return Err("Failed to create SasaTree: freesasa_tree_init returned a null pointer!");
         }
 
-        Ok(Self::from_ptr(root))
+        Ok(Self::from_ptr(root, depth))
     }
 
     /// Connects siblings nodes in the graph. This is done by iterating over all nodes and checking
@@ -220,15 +224,18 @@ impl SasaTree {
     /// Recursively add nodes to the graph.
     ///
     /// This is used to construct a [`petgraph::Graph`] from a [`freesasa_node`] tree.
+    ///
     fn recursive_add_node(
         graph: &mut petgraph::Graph<Node, ()>,
         node: &*mut freesasa_node,
         parent: Option<graph::NodeIndex>,
+        deepest_nodetype: &NodeType,
     ) {
         let mut current_node = *node;
 
         while !current_node.is_null() {
             let node = Node::new_from_node(&current_node);
+            let nodetype = *node.nodetype();
 
             let node_index = graph.add_node(node);
 
@@ -236,17 +243,24 @@ impl SasaTree {
                 graph.add_edge(parent, node_index, ());
             }
 
-            let children =
-                unsafe { freesasa_node_children(current_node) };
+            if nodetype != *deepest_nodetype {
+                // We get the children of the node, if we are not at the deepest nodetype
+                let children =
+                    unsafe { freesasa_node_children(current_node) };
 
-            if !children.is_null() {
-                Self::recursive_add_node(
-                    graph,
-                    &children,
-                    Some(node_index),
-                );
+                // If the children are not null, we recursively add them to the graph
+                if !children.is_null() {
+                    Self::recursive_add_node(
+                        graph,
+                        &children,
+                        Some(node_index),
+                        deepest_nodetype,
+                    );
+                }
             }
 
+            // We have finished adding children from this node,
+            // so we move on to the next sibling node
             current_node = unsafe { freesasa_node_next(current_node) };
         }
     }
@@ -804,7 +818,7 @@ mod test_petgraph {
         // Retake CString ownership
         free_raw_c_strings!(name);
 
-        let mut tree = SasaTree::from_ptr(root);
+        let mut tree = SasaTree::from_ptr(root, &NodeType::Atom);
 
         let current_time_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -858,8 +872,8 @@ mod test_petgraph {
             )
         };
 
-        let tree = SasaTree::from_ptr(root);
-        let sub_tree = SasaTree::from_ptr(root_sub);
+        let tree = SasaTree::from_ptr(root, &NodeType::Atom);
+        let sub_tree = SasaTree::from_ptr(root_sub, &NodeType::Atom);
 
         let diff = tree.compare_residues(
             &sub_tree,

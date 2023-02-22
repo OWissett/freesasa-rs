@@ -2,6 +2,7 @@ use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
 use crate::free_raw_c_strings;
+use crate::result::node::NodeType;
 use crate::utils::{char_to_c_char, str_to_c_string};
 use freesasa_sys::{
     fclose, fopen, freesasa_calc_structure, freesasa_calc_tree,
@@ -251,6 +252,7 @@ impl Structure {
     /// Calculates the SASA value as a tree using the default parameters
     pub fn calculate_sasa_tree(
         &self,
+        depth: &NodeType,
     ) -> Result<SasaTree, &'static str> {
         let name = str_to_c_string(&self.name)?.into_raw();
         let root = unsafe {
@@ -268,7 +270,7 @@ impl Structure {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        Ok(SasaTree::from_ptr(root))
+        Ok(SasaTree::from_ptr(root, depth))
     }
 
     /// Returns a string slice to the name of the structure
