@@ -112,6 +112,7 @@ pub struct NodeArea {
     side_chain: f64,
     polar: f64,
     apolar: f64,
+    #[serde(skip)]
     unknown: f64,
 }
 
@@ -250,10 +251,13 @@ pub enum NodeProperties {
 
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct Node {
+    #[serde(flatten)]
     area: Option<NodeArea>,
-    uid: Option<NodeUID>,
-    nodetype: NodeType,
 
+    #[serde(skip)]
+    uid: Option<NodeUID>,
+    #[serde(skip)]
+    nodetype: NodeType,
     #[serde(skip)]
     properties: Option<NodeProperties>,
     #[serde(skip)]
