@@ -71,7 +71,9 @@ impl ResidueUID {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct ChainUID {
-    chain: char,       // Chain
+    chain: char, // Chain
+
+    #[serde(skip)]
     structure: String, // Structure UID
 }
 
