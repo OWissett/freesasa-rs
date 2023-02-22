@@ -24,7 +24,7 @@ pub struct AtomProperties {
     pub is_polar: bool,             // Polar
     pub is_bb: bool,                // Is backbone
     pub radius: f64,                // Atomic radius
-    pub pdb_line: String,           // Line from PDB file
+    pub pdb_line: Option<String>,   // Line from PDB file (if available)
     pub residue: ResidueProperties, // Properties of the residue
     pub name: String,               // Atom name (e.g. CA)
 }
@@ -45,16 +45,18 @@ impl AtomProperties {
                 .to_owned()
         };
 
-        let pdb_line = unsafe { freesasa_node_atom_pdb_line(*node) };
-        if pdb_line.is_null() {
-            panic!("Invalid PDB line: {:?}", name);
-        }
-
         let pdb_line = unsafe {
-            CStr::from_ptr(pdb_line)
-                .to_str()
-                .expect("PDB line containted invalid UTF-8 bytes")
-                .to_owned()
+            match freesasa_node_atom_pdb_line(*node) {
+                ptr if ptr.is_null() => None,
+                ptr => Some(
+                    CStr::from_ptr(ptr)
+                        .to_str()
+                        .expect(
+                            "PDB line containted invalid UTF-8 bytes",
+                        )
+                        .to_owned(),
+                ),
+            }
         };
 
         let residue = ResidueProperties::new(unsafe {
