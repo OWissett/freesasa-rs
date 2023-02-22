@@ -344,7 +344,7 @@ fn new_atom_node(node: &*mut freesasa_node) -> Node {
     let area = NodeArea::new_from_node(node);
 
     let uid = NodeUID::Atom(AtomUID::new(
-        &properties.residue.chain.structure,
+        properties.residue.chain.structure,
         properties.residue.chain.id,
         properties.residue.resnum,
         properties.residue.inscode,
@@ -362,7 +362,7 @@ fn new_atom_node(node: &*mut freesasa_node) -> Node {
                 .unwrap()
                 .to_string();
             Some(NodeUID::Atom(AtomUID::new(
-                &properties.residue.chain.structure,
+                properties.residue.chain.structure,
                 properties.residue.chain.id,
                 properties.residue.resnum,
                 properties.residue.inscode,
@@ -392,7 +392,7 @@ fn new_residue_node(node: &*mut freesasa_node) -> Node {
     let area = NodeArea::new_from_node(node);
 
     let uid = NodeUID::Residue(ResidueUID::new(
-        &properties.chain.structure,
+        properties.chain.structure,
         properties.chain.id,
         properties.resnum,
         properties.inscode,
@@ -405,7 +405,7 @@ fn new_residue_node(node: &*mut freesasa_node) -> Node {
         } else {
             let sibling_properties = ResidueProperties::new(&sibling);
             Some(NodeUID::Residue(ResidueUID::new(
-                &properties.chain.structure,
+                properties.chain.structure,
                 sibling_properties.chain.id,
                 sibling_properties.resnum,
                 sibling_properties.inscode,
@@ -434,7 +434,7 @@ fn new_chain_node(node: &*mut freesasa_node) -> Node {
     let area = NodeArea::new_from_node(node);
 
     let uid = NodeUID::Chain(ChainUID::new(
-        &properties.structure,
+        properties.structure,
         properties.id,
     ));
 
@@ -445,7 +445,7 @@ fn new_chain_node(node: &*mut freesasa_node) -> Node {
         } else {
             let sibling_properties = ChainProperties::new(&sibling);
             Some(NodeUID::Chain(ChainUID::new(
-                &properties.structure,
+                properties.structure,
                 sibling_properties.id,
             )))
         }

@@ -13,7 +13,7 @@ pub struct AtomUID {
 
 impl AtomUID {
     pub fn new(
-        structure: &str,
+        structure: i32,
         chain: char,
         resnum: i32,
         inscode: Option<char>,
@@ -44,7 +44,7 @@ pub struct ResidueUID {
 
 impl ResidueUID {
     pub fn new(
-        structure: &str,
+        structure: i32,
         chain: char,
         resnum: i32,
         inscode: Option<char>,
@@ -74,23 +74,20 @@ pub struct ChainUID {
     chain: char, // Chain
 
     #[serde(skip)]
-    structure: String, // Structure UID
+    structure: i32, // Structure UID
 }
 
 impl ChainUID {
-    pub fn new(structure: &str, chain: char) -> Self {
-        Self {
-            chain,
-            structure: structure.to_owned(),
-        }
+    pub fn new(structure: i32, chain: char) -> Self {
+        Self { chain, structure }
     }
 
     pub fn chain(&self) -> char {
         self.chain
     }
 
-    pub fn structure(&self) -> &str {
-        &self.structure
+    pub fn structure(&self) -> i32 {
+        self.structure
     }
 }
 

@@ -156,9 +156,9 @@ impl ResidueProperties {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ChainProperties {
-    pub n_residues: i32,   // Number of residues
-    pub id: char,          // Chain name
-    pub structure: String, // Structure name
+    pub n_residues: i32, // Number of residues
+    pub id: char,        // Chain name
+    pub structure: i32,  // Structure name (model number)
 }
 
 impl ChainProperties {
@@ -185,19 +185,15 @@ impl ChainProperties {
             },
             structure: unsafe {
                 let structure_ptr = freesasa_node_parent(*node);
+
+                #[cfg(debug_assertions)]
                 assert_nodetype(&structure_ptr, NodeType::Structure);
 
                 if structure_ptr.is_null() {
                     panic!("Invalid parent node");
                 }
-                let name = freesasa_node_name(structure_ptr);
-                if name.is_null() {
-                    panic!("Invalid structure name");
-                }
-
-                let name = CStr::from_ptr(name);
-
-                name.to_str().unwrap().to_string()
+                let name = freesasa_node_structure_model(structure_ptr);
+                name
             },
         }
     }
