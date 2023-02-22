@@ -479,7 +479,9 @@ impl SasaTreeNative {
                     }
                 },
                 Err(e) => {
-                    println!("Error: {:?}", e);
+                    #[cfg(debug_assertions)]
+                    debug!("Error: {:?}", e);
+
                     warn!("Could not get residue UID for node: {:?}. Skipping...", sibling);
                     continue;
                 }
@@ -586,8 +588,8 @@ impl SasaTreeNative {
                 }
             };
             if h.insert(sibling_uid, (node, area)).is_some() {
-                println!(
-                    "WARNING: It appears that multiple siblings have the same name: {:?}",
+                warn!(
+                    "It appears that multiple siblings have the same name: {:?}",
                     SasaTreeNative::get_node_uid(node)
                 );
             }

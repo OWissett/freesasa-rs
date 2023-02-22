@@ -179,7 +179,7 @@ impl NodeArea {
     pub(super) fn new_from_node(node: &*mut freesasa_node) -> Self {
         #[cfg(debug_assertions)]
         {
-            println!(
+            trace!(
                 "NodeType: {:?}",
                 NodeType::from_fs_level(unsafe {
                     freesasa_node_type(*node)

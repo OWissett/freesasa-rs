@@ -121,12 +121,12 @@ impl ResidueProperties {
 
         #[cfg(debug_assertions)]
         {
-            println!("Residue number: {}", resnum);
+            trace!("Residue number: {}", resnum);
             if let Some(inscode) = inscode {
                 println!("Insertion code: {}", inscode);
             }
 
-            println!("Residue name: {}", unsafe {
+            trace!("Residue name: {}", unsafe {
                 CStr::from_ptr(freesasa_node_name(*node))
                     .to_str()
                     .unwrap()
