@@ -250,10 +250,13 @@ pub enum NodeProperties {
 
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct Node {
-    properties: Option<NodeProperties>,
     area: Option<NodeArea>,
     uid: Option<NodeUID>,
     nodetype: NodeType,
+
+    #[serde(skip)]
+    properties: Option<NodeProperties>,
+    #[serde(skip)]
     sibling_uid: Option<NodeUID>,
 }
 
