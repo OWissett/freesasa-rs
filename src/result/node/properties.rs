@@ -47,7 +47,7 @@ impl AtomProperties {
 
         let pdb_line = unsafe { freesasa_node_atom_pdb_line(*node) };
         if pdb_line.is_null() {
-            panic!("Invalid PDB line");
+            panic!("Invalid PDB line: {:?}", name);
         }
 
         let pdb_line = unsafe {
