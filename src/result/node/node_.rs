@@ -258,8 +258,7 @@ pub struct Node {
 }
 
 impl Node {
-    #[allow(dead_code)]
-    pub(crate) fn new(
+    pub fn new(
         properties: Option<NodeProperties>,
         area: Option<NodeArea>,
         uid: Option<NodeUID>,
