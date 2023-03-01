@@ -22,6 +22,7 @@ use freesasa_sys::{
     freesasa_nodetype_FREESASA_NODE_ROOT as FREESASA_NODE_ROOT,
     freesasa_nodetype_FREESASA_NODE_STRUCTURE as FREESASA_NODE_STRUCTURE,
 };
+use serde::{ser::SerializeTuple, Serialize};
 
 use crate::{
     uids::{AtomUID, ChainUID, NodeUID, ResidueUID},
@@ -105,15 +106,43 @@ impl NodeType {
 }
 
 /// Struct for storing SASA area values for a node.
-#[derive(Debug, serde::Serialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct NodeArea {
     total: f64,
     main_chain: f64,
     side_chain: f64,
     polar: f64,
     apolar: f64,
-    #[serde(skip)]
     unknown: f64,
+}
+
+impl Default for NodeArea {
+    fn default() -> Self {
+        Self {
+            total: 0.0,
+            main_chain: 0.0,
+            side_chain: 0.0,
+            polar: 0.0,
+            apolar: 0.0,
+            unknown: 0.0,
+        }
+    }
+}
+
+impl Serialize for NodeArea {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_tuple(6)?;
+        state.serialize_element(&self.total)?;
+        state.serialize_element(&self.main_chain)?;
+        state.serialize_element(&self.side_chain)?;
+        state.serialize_element(&self.polar)?;
+        state.serialize_element(&self.apolar)?;
+        state.serialize_element(&self.unknown)?;
+        state.end()
+    }
 }
 
 impl Sub for NodeArea {

@@ -192,8 +192,7 @@ impl ChainProperties {
                 if structure_ptr.is_null() {
                     panic!("Invalid parent node");
                 }
-                let name = freesasa_node_structure_model(structure_ptr);
-                name
+                freesasa_node_structure_model(structure_ptr)
             },
         }
     }
