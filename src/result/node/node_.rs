@@ -280,7 +280,6 @@ pub enum NodeProperties {
 
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct Node {
-    #[serde(flatten)]
     area: Option<NodeArea>,
 
     #[serde(skip)]
