@@ -1,7 +1,8 @@
-use std::{ffi, fmt, os::raw, ptr};
+use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
 use crate::free_raw_c_strings;
+use crate::result::node::NodeType;
 use crate::utils::{char_to_c_char, str_to_c_string};
 use freesasa_sys::{
     fclose, fopen, freesasa_calc_structure, freesasa_calc_tree,
@@ -14,18 +15,23 @@ use freesasa_sys::{
 use crate::result::{SasaResult, SasaTree};
 
 /// Set the default behaviour for PDB loading
-const DEFAULT_STRUCTURE_OPTIONS: raw::c_int = 0 as raw::c_int;
+pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
+    0 as raw::c_int;
 
-const DEFAULT_CALCULATION_PARAMETERS: *const freesasa_parameters =
-    ptr::null();
+pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
+    *const freesasa_parameters = ptr::null();
 
 /// Simple Rust struct wrapper for freesasa_structure object.
 ///
+/// Object currently can only be instantiated from a path to a pdb,
+/// as an empty structure, or from a [`pdbtbx::PDB`] object.
 ///
-/// Object currently can only be instantiated from a pdb_path or as
-/// an empty structure. When creating an empty structure, you need
+/// When creating an empty structure, you need
 /// to then add atoms to it using `.add_atoms()` before attempting
 /// to calculate the SASA.
+///
+/// To access the raw pointer to the C-API freesasa_structure object,
+/// the `unsafe-ops` feature needs to be enabled.
 #[derive(Debug)]
 pub struct Structure {
     /// Raw pointer to the C-API freesasa_structure object.
@@ -140,15 +146,16 @@ impl Structure {
         })
     }
 
+    /// Creates a RustSASA [`Structure`] from a [`pdbtbx::PDB`].
     pub fn from_pdbtbx(
-        pdbtbx_structure: pdbtbx::PDB,
+        pdbtbx_structure: &pdbtbx::PDB,
     ) -> Result<Self, &'static str> {
         let name = pdbtbx_structure
             .identifier
             .clone()
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let fs_structure = Self::new_empty(Some(name.as_str()))?;
+        let mut fs_structure = Self::new_empty(Some(name.as_str()))?;
 
         // Build the structure
         for chain in pdbtbx_structure.chains() {
@@ -194,9 +201,9 @@ impl Structure {
         Ok(fs_structure)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Adds atoms to the structure
     pub fn add_atom(
-        &self,
+        &mut self, // We should indicate to the compiler, that this is a mutable reference, since we are modifying the underlying data structure
         atom_name: &str,
         res_name: &str,
         res_number: &str,
@@ -245,6 +252,7 @@ impl Structure {
     /// Calculates the SASA value as a tree using the default parameters
     pub fn calculate_sasa_tree(
         &self,
+        depth: &NodeType,
     ) -> Result<SasaTree, &'static str> {
         let name = str_to_c_string(&self.name)?.into_raw();
         let root = unsafe {
@@ -256,15 +264,13 @@ impl Structure {
         };
 
         // Retake CString ownership
-        unsafe {
-            let _ = ffi::CString::from_raw(name);
-        }
+        free_raw_c_strings!(name);
 
         if root.is_null() {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        SasaTree::new(root)
+        Ok(SasaTree::from_ptr(root, depth))
     }
 
     /// Returns a string slice to the name of the structure
@@ -276,9 +282,9 @@ impl Structure {
         self.ptr.is_null()
     }
 
-    // ---------------- //
-    // Internal Methods //
-    // ---------------- //
+    // --------------- //
+    // Pointer Methods //
+    // --------------- //
 
     /// Returns the underlying pointer to the freesasa_structure C object.
     ///
@@ -288,11 +294,24 @@ impl Structure {
     /// If this pointer is deallocated early, you will get undefined behaviour since
     /// Drop will attempt to free the same memory (e.g. double free) when this FSStructure
     /// object is destroyed.
+    #[cfg(not(feature = "unsafe-ops"))]
+    #[allow(dead_code)]
     pub(crate) fn as_ptr(&self) -> *mut freesasa_structure {
         self.ptr
     }
 
+    #[cfg(feature = "unsafe-ops")]
+    pub fn as_ptr(&self) -> *mut freesasa_structure {
+        self.ptr
+    }
+
+    #[cfg(not(feature = "unsafe-ops"))]
     pub(crate) fn as_const_ptr(&self) -> *const freesasa_structure {
+        self.ptr as *const freesasa_structure
+    }
+
+    #[cfg(feature = "unsafe-ops")]
+    pub fn as_const_ptr(&self) -> *const freesasa_structure {
         self.ptr as *const freesasa_structure
     }
 }
@@ -322,6 +341,8 @@ impl fmt::Display for Structure {
 #[cfg(test)]
 mod tests {
 
+    use std::ffi;
+
     use freesasa_sys::{
         freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
@@ -340,12 +361,24 @@ mod tests {
     #[test]
     fn from_pdbtbx() {
         let (pdb, _e) = pdbtbx::open(
-            "./data/single_chain.pdb",
+            "./data/7trr.pdb",
             pdbtbx::StrictnessLevel::Loose,
         )
         .unwrap();
 
-        let _ = Structure::from_pdbtbx(pdb).unwrap();
+        let pdb_from_pdbtbx = Structure::from_pdbtbx(&pdb).unwrap();
+
+        let pdb_from_path =
+            Structure::from_path("./data/7trr.pdb", None).unwrap();
+
+        let tree_pdbtbx = pdb_from_pdbtbx.calculate_sasa().unwrap();
+        let tree_path = pdb_from_path.calculate_sasa().unwrap();
+
+        let percent_diff = (tree_pdbtbx.total - tree_path.total)
+            / tree_pdbtbx.total
+            * 100.0;
+
+        assert!(percent_diff < 0.1);
     }
 
     #[test]
@@ -369,7 +402,7 @@ mod tests {
             ("ND2", "ASN", "1", 'A', 7.658, 8.070, 10.981),
         ];
 
-        let structure = Structure::new_empty(Some("test")).unwrap();
+        let mut structure = Structure::new_empty(Some("test")).unwrap();
 
         for atom in atoms {
             structure
@@ -386,6 +419,8 @@ mod tests {
         let full_sasa = structure.calculate_sasa().unwrap().total;
 
         println!("full: {}\n\n", full_sasa);
+
+        assert_eq!(full_sasa, 257.35019683715666);
     }
 
     #[test]

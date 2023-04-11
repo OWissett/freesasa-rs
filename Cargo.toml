@@ -1,6 +1,6 @@
 [package]
-name = "rust_sasa"
-version = "0.1.0"
+name = "freesasa-rs"
+version = "0.1.1"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,6 +10,8 @@ log = "0.4.17"
 env_logger = "0.10.0"
 pdbtbx = { git = "https://github.com/douweschulte/pdbtbx" }
 freesasa-sys = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+petgraph = { version = "0.6.3", features = ["serde-1"] }
 
 [profile.release]
 debug = true
@@ -22,4 +24,4 @@ name = "my_benchmark"
 harness = false
 
 [features]
-ffi = []
+unsafe-ops = []

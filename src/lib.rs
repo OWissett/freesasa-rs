@@ -17,7 +17,7 @@
 //!
 //! ## Example
 //! ```rust
-//! use rust_sasa::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
+//! use freesasa_rs::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
 //!
 //! // Set the verbosity of the freesasa library
 //! set_fs_verbosity(FreesasaVerbosity::Info);
@@ -43,10 +43,10 @@
 extern crate log;
 
 pub mod classifier;
-pub mod node;
 pub mod result;
 pub mod selection;
 pub mod structure;
+pub mod uids;
 mod utils;
 
 // Bring the needed freesasa functions into scope

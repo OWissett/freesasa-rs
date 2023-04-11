@@ -1,13 +1,72 @@
 variables:
   IMAGE_TAG: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
 
-build_image:
-  stage: build
-  image: docker:latest
-  services:
-    - docker:dind
+stages:
+  - Build
+  - Doc
+
+# Cache the rustup toolchain so that we don't
+# have to download it every time
+.cache_toolchain: &cache_toolchain
+  cache:
+    key: $CI_JOB_NAME
+    paths:
+      - /usr/share/rust/.rustup
+
+rust-latest:
+  stage: Build
+  image: $CI_REGISTRY/ch/sormanni/frag-db/sprintx:ci
   script:
-    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
-    - docker build -t $IMAGE_TAG .
-    - docker push $IMAGE_TAG
-  when: manual
+    - cargo build --verbose
+    - cargo test --verbose
+
+rust-latest-release:
+  stage: Build
+  image: $CI_REGISTRY/ch/sormanni/frag-db/sprintx:ci
+  script:
+    - cargo build --release --verbose
+    - cargo test --release --verbose
+  only:
+    - main
+    - dev
+
+rust-nightly:
+  <<: *cache_toolchain
+  stage: Build
+  image: $CI_REGISTRY/ch/sormanni/frag-db/sprintx:ci
+  script:
+    - rustup toolchain install nightly
+    - rustup default nightly
+    - cargo build --verbose
+    - cargo test --verbose
+  only:
+    - main
+    - dev
+
+rust-beta:
+  <<: *cache_toolchain
+  stage: Build
+  image: $CI_REGISTRY/ch/sormanni/frag-db/sprintx:ci
+  script:
+    - rustup toolchain install beta
+    - rustup default beta
+    - cargo build --verbose
+    - cargo test --verbose
+  only:
+    - main
+    - dev
+
+  # When this is working, the above doc job should be removed
+# also, the job should only be run on the main branch
+pages:
+  image: $CI_REGISTRY/ch/sormanni/frag-db/sprintx:ci
+  stage: Doc
+  script:
+    - cargo doc --no-deps --all-features --document-private-items
+    - mv target/doc public
+    - echo "<meta http-equiv=refresh content=0;url=freesasa_rs/index.html>" > public/index.html
+  artifacts:
+    paths:
+      - public
+  only:
+    - main

@@ -46,3 +46,5 @@ CMakeFiles/
 # Some random data files
 *.svg
 *.data
+*.png
+*.dot
