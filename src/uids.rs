@@ -73,7 +73,6 @@ impl ResidueUID {
 pub struct ChainUID {
     chain: char, // Chain
 
-    #[serde(skip)]
     structure: i32, // Structure UID
 }
 
@@ -99,10 +98,12 @@ impl ChainUID {
 #[derive(Debug, serde::Serialize, PartialEq, Eq, Hash, Clone)]
 #[serde(untagged)]
 pub enum NodeUID {
-    Atom(AtomUID),       // Unique ID for an atom. e.g., A:1A:CA
+    Root, // Root node of the tree - no UID - see https://freesasa.github.io/doxygen/group__node.html
+    Result, // Result node of the tree - no UID
+    Atom(AtomUID), // Unique ID for an atom. e.g., A:1A:CA
     Residue(ResidueUID), // Unique ID for a residue. e.g., A:1A
-    Chain(ChainUID),     // Unique ID for a chain. e.g., A
-    Structure(String),   // Unique ID for a structure. e.g., 1A2B
+    Chain(ChainUID), // Unique ID for a chain. e.g., A
+    Structure(String), // Unique ID for a structure. e.g., 1A2B
 }
 
 // ---------------------- //
@@ -112,6 +113,8 @@ pub enum NodeUID {
 impl Display for NodeUID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            NodeUID::Root => write!(f, "Root"),
+            NodeUID::Result => write!(f, "Result"),
             NodeUID::Atom(atom) => write!(f, "{}", atom),
             NodeUID::Residue(residue) => write!(f, "{}", residue),
             NodeUID::Chain(chain) => write!(f, "{}", chain),
