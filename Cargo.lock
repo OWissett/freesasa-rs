@@ -330,6 +330,7 @@ dependencies = [
  "pdbtbx",
  "petgraph",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -783,6 +783,7 @@ mod test_native {
 mod test_petgraph {
     use freesasa_sys::freesasa_calc_tree;
     use petgraph::dot::{Config, Dot};
+    use serde::de::Expected;
 
     use super::*;
     use crate::result::node::NodeType;
@@ -884,6 +885,72 @@ mod test_petgraph {
         for uid in diff {
             println!("{:?}", uid);
         }
+    }
+
+    #[test]
+    fn validate_compare_residues() {
+        // The test PDB file is 3b7y_B.pdb (full structure) and
+        // 3b7y_B_match_removed.pdb (residues 147-156 [inclusive] removed)) as
+        // the substructure.
+        //
+        // The file 3b7y_B_sasa_results.json was computed by M. Greenig using
+        // a python script and the freesasa library, and then manually verified
+        // as sensible.
+
+        let base_pdb =
+            structure::Structure::from_path("data/3b7y_B.pdb", None)
+                .unwrap();
+
+        let sub_pdb = structure::Structure::from_path(
+            "data/3b7y_B_match_removed.pdb",
+            None,
+        )
+        .unwrap();
+        let base_tree =
+            base_pdb.calculate_sasa_tree(&NodeType::Residue).unwrap();
+
+        let sub_tree =
+            sub_pdb.calculate_sasa_tree(&NodeType::Residue).unwrap();
+
+        let diff = base_tree.compare_residues(
+            &sub_tree,
+            |c, o| o - c,
+            |a| a.total() > 0.0,
+        );
+
+        let diff = diff
+            .iter()
+            .map(|n| {
+                let resnum = match n.uid().unwrap() {
+                    NodeUID::Residue(r) => r.resnum(),
+                    _ => panic!("Expected residue"),
+                };
+                (resnum.to_string(), n.area().unwrap().total())
+            })
+            .collect::<HashMap<String, f64>>();
+
+        // Read the expected results from the JSON file using serde
+        let expected_results: HashMap<String, f64> =
+            serde_json::from_str(
+                &std::fs::read_to_string(
+                    "data/3b7y_B_sasa_results.json",
+                )
+                .unwrap(),
+            )
+            .unwrap();
+
+        let expected_results = expected_results
+            .iter()
+            .filter(|(_, v)| **v > 0.0)
+            .map(|(k, v)| (k.to_string(), *v))
+            .collect();
+
+        // Pretty print the results
+        println!("Diff: {:#?}", diff);
+        println!("Expected: {:#?}", expected_results);
+
+        // Compare the results
+        assert_eq!(diff, expected_results);
     }
 }
 
