@@ -146,7 +146,7 @@ impl Display for ResidueUID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.inscode {
             Some(code) => {
-                write!(f, "{}:{}{}", self.chain, self.resnum, code)
+                write!(f, "{}:{}:{}", self.chain, self.resnum, code)
             }
             None => write!(f, "{}:{}", self.chain, self.resnum),
         }
