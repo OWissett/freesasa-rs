@@ -206,6 +206,7 @@ impl SasaTree {
         &self.children
     }
 
+    /// Provides an iterator over the nodes in the tree.
     pub fn nodes<'a>(&'a self) -> Box<dyn Iterator<Item = &Node> + 'a> {
         // We want to flatten the tree into a Vec of nodes, so we need to
         // traverse the tree in a breadth-first manner. We use a VecDeque
