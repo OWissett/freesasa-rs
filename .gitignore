@@ -48,3 +48,5 @@ CMakeFiles/
 *.data
 *.png
 *.dot
+
+*.pse

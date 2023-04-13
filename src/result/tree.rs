@@ -298,11 +298,11 @@ mod tests {
         // as sensible.
 
         let base_pdb =
-            structure::Structure::from_path("data/3b7y_B.pdb", None)
+            structure::Structure::from_path("data/3b7y_matt.pdb", None)
                 .unwrap();
 
         let sub_pdb = structure::Structure::from_path(
-            "data/3b7y_B_match_removed.pdb",
+            "data/3b7y_matt_match_removed.pdb",
             None,
         )
         .unwrap();
