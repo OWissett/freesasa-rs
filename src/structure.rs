@@ -270,7 +270,7 @@ impl Structure {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        Ok(SasaTree::from_ptr(root, depth))
+        Ok(SasaTree::new(root, depth))
     }
 
     /// Returns a string slice to the name of the structure

@@ -6,14 +6,13 @@
 //! `rust-sasa` library.
 
 use std::{
-    ffi::CStr,
     ops::{Add, Sub},
     str::FromStr,
 };
 
 use freesasa_sys::{
-    freesasa_node, freesasa_node_area, freesasa_node_name,
-    freesasa_node_next, freesasa_node_type, freesasa_nodetype,
+    freesasa_node, freesasa_node_area, freesasa_node_type,
+    freesasa_nodetype,
     freesasa_nodetype_FREESASA_NODE_ATOM as FREESASA_NODE_ATOM,
     freesasa_nodetype_FREESASA_NODE_CHAIN as FREESASA_NODE_CHAIN,
     freesasa_nodetype_FREESASA_NODE_NONE as FREESASA_NODE_NONE,
@@ -106,7 +105,7 @@ impl NodeType {
 }
 
 /// Struct for storing SASA area values for a node.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct NodeArea {
     total: f64,
     main_chain: f64,
@@ -126,22 +125,6 @@ impl Default for NodeArea {
             apolar: 0.0,
             unknown: 0.0,
         }
-    }
-}
-
-impl Serialize for NodeArea {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        let mut state = serializer.serialize_tuple(6)?;
-        state.serialize_element(&self.total)?;
-        state.serialize_element(&self.main_chain)?;
-        state.serialize_element(&self.side_chain)?;
-        state.serialize_element(&self.polar)?;
-        state.serialize_element(&self.apolar)?;
-        state.serialize_element(&self.unknown)?;
-        state.end()
     }
 }
 
@@ -283,36 +266,30 @@ pub struct Node {
     area: Option<NodeArea>,
 
     #[serde(skip)]
-    uid: Option<NodeUID>,
-    #[serde(skip)]
+    uid: NodeUID,
     nodetype: NodeType,
     #[serde(skip)]
     properties: Option<NodeProperties>,
-    #[serde(skip)]
-    sibling_uid: Option<NodeUID>,
 }
 
 impl Node {
     pub fn new(
         properties: Option<NodeProperties>,
         area: Option<NodeArea>,
-        uid: Option<NodeUID>,
+        uid: NodeUID,
         nodetype: NodeType,
-        sibling_uid: Option<NodeUID>,
     ) -> Self {
         Self {
             properties,
             area,
             uid,
             nodetype,
-            sibling_uid,
         }
     }
 
-    pub(crate) fn new_from_node(node: &*mut freesasa_node) -> Self {
-        let nodetype = NodeType::from_fs_level(unsafe {
-            freesasa_node_type(*node)
-        });
+    pub(crate) unsafe fn from_ptr(node: &*mut freesasa_node) -> Self {
+        let nodetype =
+            NodeType::from_fs_level(freesasa_node_type(*node));
 
         match nodetype {
             NodeType::Atom => new_atom_node(node),
@@ -322,9 +299,8 @@ impl Node {
             NodeType::Root => Node {
                 properties: None,
                 area: None,
-                uid: None,
+                uid: NodeUID::Root,
                 nodetype: NodeType::Root,
-                sibling_uid: None,
             },
             NodeType::Result => new_result_node(node),
             _ => panic!("Invalid node type: {:?}", nodetype),
@@ -339,20 +315,12 @@ impl Node {
         self.area.as_ref()
     }
 
-    pub fn uid(&self) -> Option<&NodeUID> {
-        self.uid.as_ref()
-    }
-
-    pub fn take_uid(&mut self) -> Option<NodeUID> {
-        self.uid.take()
+    pub fn uid(&self) -> &NodeUID {
+        &self.uid
     }
 
     pub fn nodetype(&self) -> &NodeType {
         &self.nodetype
-    }
-
-    pub fn sibling_uid(&self) -> Option<&NodeUID> {
-        self.sibling_uid.as_ref()
     }
 
     pub fn set_area(&mut self, area: Option<NodeArea>) {
@@ -379,32 +347,11 @@ fn new_atom_node(node: &*mut freesasa_node) -> Node {
         properties.name.clone(),
     ));
 
-    let sibling_uid = unsafe {
-        let sibling = freesasa_node_next(*node);
-        if sibling.is_null() {
-            None
-        } else {
-            let sibling_name = freesasa_node_name(sibling);
-            let sibling_name = CStr::from_ptr(sibling_name)
-                .to_str()
-                .unwrap()
-                .to_string();
-            Some(NodeUID::Atom(AtomUID::new(
-                properties.residue.chain.structure,
-                properties.residue.chain.id,
-                properties.residue.resnum,
-                properties.residue.inscode,
-                sibling_name,
-            )))
-        }
-    };
-
     Node {
         properties: Some(NodeProperties::Atom(properties)),
         area: Some(area),
-        uid: Some(uid),
+        uid,
         nodetype: NodeType::Atom,
-        sibling_uid,
     }
 }
 
@@ -426,27 +373,11 @@ fn new_residue_node(node: &*mut freesasa_node) -> Node {
         properties.inscode,
     ));
 
-    let sibling_uid = unsafe {
-        let sibling = freesasa_node_next(*node);
-        if sibling.is_null() {
-            None
-        } else {
-            let sibling_properties = ResidueProperties::new(&sibling);
-            Some(NodeUID::Residue(ResidueUID::new(
-                properties.chain.structure,
-                sibling_properties.chain.id,
-                sibling_properties.resnum,
-                sibling_properties.inscode,
-            )))
-        }
-    };
-
     Node {
         properties: Some(NodeProperties::Residue(properties)),
         area: Some(area),
-        uid: Some(uid),
+        uid,
         nodetype: NodeType::Residue,
-        sibling_uid,
     }
 }
 
@@ -466,25 +397,11 @@ fn new_chain_node(node: &*mut freesasa_node) -> Node {
         properties.id,
     ));
 
-    let sibling_uid = unsafe {
-        let sibling = freesasa_node_next(*node);
-        if sibling.is_null() {
-            None
-        } else {
-            let sibling_properties = ChainProperties::new(&sibling);
-            Some(NodeUID::Chain(ChainUID::new(
-                properties.structure,
-                sibling_properties.id,
-            )))
-        }
-    };
-
     Node {
         properties: Some(NodeProperties::Chain(properties)),
         area: Some(area),
-        uid: Some(uid),
+        uid,
         nodetype: NodeType::Chain,
-        sibling_uid,
     }
 }
 
@@ -501,22 +418,11 @@ fn new_structure_node(node: &*mut freesasa_node) -> Node {
 
     let uid = NodeUID::Structure(properties.name.clone());
 
-    let sibling_uid = unsafe {
-        let sibling = freesasa_node_next(*node);
-        if sibling.is_null() {
-            None
-        } else {
-            let sibling_properties = StructureProperties::new(&sibling);
-            Some(NodeUID::Structure(sibling_properties.name))
-        }
-    };
-
     Node {
         properties: Some(NodeProperties::Structure(properties)),
         area: Some(area),
-        uid: Some(uid),
+        uid,
         nodetype: NodeType::Structure,
-        sibling_uid,
     }
 }
 
@@ -528,8 +434,7 @@ fn new_result_node(node: &*mut freesasa_node) -> Node {
     Node {
         properties: Some(NodeProperties::Result(properties)),
         area: None,
-        uid: None,
+        uid: NodeUID::Result,
         nodetype: NodeType::Result,
-        sibling_uid: None,
     }
 }
