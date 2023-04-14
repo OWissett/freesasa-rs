@@ -21,12 +21,8 @@ use freesasa_sys::{
     freesasa_nodetype_FREESASA_NODE_ROOT as FREESASA_NODE_ROOT,
     freesasa_nodetype_FREESASA_NODE_STRUCTURE as FREESASA_NODE_STRUCTURE,
 };
-use serde::{ser::SerializeTuple, Serialize};
 
-use crate::{
-    uids::{AtomUID, ChainUID, NodeUID, ResidueUID},
-    utils::assert_nodetype,
-};
+use crate::{uids::NodeUid, utils::assert_nodetype};
 
 use super::properties::{
     AtomProperties, ChainProperties, ResidueProperties,
@@ -101,6 +97,12 @@ impl NodeType {
             NodeType::Result => FREESASA_NODE_RESULT,
             NodeType::Root => FREESASA_NODE_ROOT,
         }
+    }
+
+    pub(crate) fn nodetype_of_ptr(node: *const freesasa_node) -> Self {
+        assert!(!node.is_null());
+        let level = unsafe { freesasa_node_type(node) };
+        NodeType::from_fs_level(level)
     }
 }
 
@@ -266,7 +268,7 @@ pub struct Node {
     area: Option<NodeArea>,
 
     #[serde(skip)]
-    uid: NodeUID,
+    uid: Option<NodeUid>,
     nodetype: NodeType,
     #[serde(skip)]
     properties: Option<NodeProperties>,
@@ -274,10 +276,10 @@ pub struct Node {
 
 impl Node {
     pub fn new(
+        nodetype: NodeType,
         properties: Option<NodeProperties>,
         area: Option<NodeArea>,
-        uid: NodeUID,
-        nodetype: NodeType,
+        uid: Option<NodeUid>,
     ) -> Self {
         Self {
             properties,
@@ -297,10 +299,10 @@ impl Node {
             NodeType::Chain => new_chain_node(node),
             NodeType::Structure => new_structure_node(node),
             NodeType::Root => Node {
+                nodetype: NodeType::Root,
                 properties: None,
                 area: None,
-                uid: NodeUID::Root,
-                nodetype: NodeType::Root,
+                uid: None,
             },
             NodeType::Result => new_result_node(node),
             _ => panic!("Invalid node type: {:?}", nodetype),
@@ -315,8 +317,8 @@ impl Node {
         self.area.as_ref()
     }
 
-    pub fn uid(&self) -> &NodeUID {
-        &self.uid
+    pub fn uid(&self) -> Option<&NodeUid> {
+        self.uid.as_ref()
     }
 
     pub fn nodetype(&self) -> &NodeType {
@@ -339,13 +341,12 @@ fn new_atom_node(node: &*mut freesasa_node) -> Node {
     let properties = AtomProperties::new(node);
     let area = NodeArea::new_from_node(node);
 
-    let uid = NodeUID::Atom(AtomUID::new(
+    let uid = NodeUid::new(
         properties.residue.chain.structure,
-        properties.residue.chain.id,
-        properties.residue.resnum,
-        properties.residue.inscode,
-        properties.name.clone(),
-    ));
+        Some(properties.residue.chain.id),
+        Some((properties.residue.resnum, properties.residue.inscode)),
+        Some(properties.name.clone()),
+    );
 
     Node {
         properties: Some(NodeProperties::Atom(properties)),

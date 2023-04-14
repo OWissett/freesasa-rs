@@ -7,7 +7,7 @@ use freesasa_sys::{
 };
 use serde_with::{serde_as, DisplayFromStr};
 
-use crate::uids::NodeUID;
+use crate::uids::NodeUid;
 use crate::{
     free_raw_c_strings, structure::Structure, utils::str_to_c_string,
 };

@@ -2,13 +2,11 @@ use std::ffi::CStr;
 
 use freesasa_sys::{
     freesasa_node, freesasa_node_atom_is_mainchain,
-    freesasa_node_atom_is_polar, freesasa_node_atom_pdb_line,
-    freesasa_node_atom_radius, freesasa_node_chain_n_residues,
-    freesasa_node_classified_by, freesasa_node_name,
-    freesasa_node_parent, freesasa_node_residue_n_atoms,
-    freesasa_node_residue_number, freesasa_node_structure_chain_labels,
+    freesasa_node_atom_is_polar, freesasa_node_atom_radius,
+    freesasa_node_chain_n_residues, freesasa_node_classified_by,
+    freesasa_node_name, freesasa_node_parent,
+    freesasa_node_residue_n_atoms, freesasa_node_residue_number,
     freesasa_node_structure_model, freesasa_node_structure_n_atoms,
-    freesasa_node_structure_n_chains,
 };
 
 use crate::utils::assert_nodetype;
@@ -21,12 +19,9 @@ use super::NodeType;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AtomProperties {
-    pub is_polar: bool,             // Polar
-    pub is_bb: bool,                // Is backbone
-    pub radius: f64,                // Atomic radius
-    pub pdb_line: Option<String>,   // Line from PDB file (if available)
-    pub residue: ResidueProperties, // Properties of the residue
-    pub name: String,               // Atom name (e.g. CA)
+    pub is_polar: bool, // Polar
+    pub is_bb: bool,    // Is backbone
+    pub radius: f64,    // Atomic radius
 }
 
 impl AtomProperties {
@@ -45,24 +40,6 @@ impl AtomProperties {
                 .to_owned()
         };
 
-        let pdb_line = unsafe {
-            match freesasa_node_atom_pdb_line(*node) {
-                ptr if ptr.is_null() => None,
-                ptr => Some(
-                    CStr::from_ptr(ptr)
-                        .to_str()
-                        .expect(
-                            "PDB line containted invalid UTF-8 bytes",
-                        )
-                        .to_owned(),
-                ),
-            }
-        };
-
-        let residue = ResidueProperties::new(unsafe {
-            &freesasa_node_parent(*node)
-        });
-
         let radius = unsafe { freesasa_node_atom_radius(*node) };
 
         let is_polar =
@@ -75,20 +52,14 @@ impl AtomProperties {
             is_polar,
             is_bb,
             radius,
-            pdb_line,
-            residue,
-            name,
         }
     }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ResidueProperties {
-    pub n_atoms: i32,           // Number of atoms
-    pub resnum: i32,            // Residue number
-    pub inscode: Option<char>,  // Insertion code
-    pub resname: String,        // Residue name
-    pub chain: ChainProperties, // Chain name
+    pub n_atoms: i32,    // Number of atoms
+    pub resname: String, // Residue name
 }
 
 impl ResidueProperties {
@@ -135,8 +106,6 @@ impl ResidueProperties {
 
         ResidueProperties {
             n_atoms: unsafe { freesasa_node_residue_n_atoms(*node) },
-            resnum: resnum.parse().unwrap(),
-            inscode,
             resname: unsafe {
                 let name = freesasa_node_name(*node);
                 if name.is_null() {
@@ -147,9 +116,6 @@ impl ResidueProperties {
 
                 name.to_str().unwrap().to_string()
             },
-            chain: ChainProperties::new(unsafe {
-                &freesasa_node_parent(*node)
-            }),
         }
     }
 }
@@ -200,54 +166,16 @@ impl ChainProperties {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct StructureProperties {
-    pub chain_uids: Vec<char>, // Chain names
-    pub n_atoms: i32,          // Number of atoms
-    pub model: i32,            // Model number
-    pub name: String,          // Structure name
+    pub n_atoms: i32, // Number of atoms
 }
 
 impl StructureProperties {
     pub(super) fn new(node: &*mut freesasa_node) -> Self {
         assert_nodetype(node, NodeType::Structure);
 
-        let name = unsafe { freesasa_node_name(*node) };
-        if name.is_null() {
-            panic!("Invalid structure name");
-        }
-
-        let name = unsafe {
-            CStr::from_ptr(name)
-                .to_str()
-                .expect("Structure name containted invalid UTF-8 bytes")
-                .to_owned()
-        };
-
-        let model = unsafe { freesasa_node_structure_model(*node) };
-
         let n_atoms = unsafe { freesasa_node_structure_n_atoms(*node) };
 
-        let chain_uids = unsafe {
-            let n_chains = freesasa_node_structure_n_chains(*node);
-            let uids = freesasa_node_structure_chain_labels(*node);
-
-            let uids = uids as *const char;
-            if uids.is_null() {
-                panic!("Invalid chain labels, null pointer");
-            }
-
-            let uids =
-                std::slice::from_raw_parts(uids, n_chains as usize);
-
-            // move the chain labels into a Vec
-            uids.to_vec()
-        };
-
-        StructureProperties {
-            chain_uids,
-            n_atoms,
-            model,
-            name,
-        }
+        StructureProperties { n_atoms }
     }
 }
 
