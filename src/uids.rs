@@ -33,8 +33,22 @@ pub struct NodeUid {
 }
 
 impl NodeUid {
+    pub fn new(
+        structure: i32,
+        chain: Option<char>,
+        res_id: Option<ResID>,
+        atom_name: Option<String>,
+    ) -> Self {
+        Self {
+            structure,
+            chain,
+            res_id,
+            atom_name,
+        }
+    }
+
     // Create a new `NodeUid` from a `UidPrimitive`.
-    fn new(
+    fn from_primitive(
         (structure, chain, res_id, atom_name): UidPrimitive,
     ) -> Self {
         #[cfg(debug_assertions)]
@@ -70,17 +84,17 @@ impl NodeUid {
         let node_type = NodeType::nodetype_of_ptr(node);
 
         match node_type {
-            NodeType::Structure => {
-                Some(Self::new(Self::from_structure_ptr(node)))
-            }
+            NodeType::Structure => Some(Self::from_primitive(
+                Self::from_structure_ptr(node),
+            )),
             NodeType::Chain => {
-                Some(Self::new(Self::from_chain_ptr(node)))
+                Some(Self::from_primitive(Self::from_chain_ptr(node)))
             }
             NodeType::Residue => {
-                Some(Self::new(Self::from_residue_ptr(node)))
+                Some(Self::from_primitive(Self::from_residue_ptr(node)))
             }
             NodeType::Atom => {
-                Some(Self::new(Self::from_atom_ptr(node)))
+                Some(Self::from_primitive(Self::from_atom_ptr(node)))
             }
             NodeType::None => None,
             NodeType::Result => None,
