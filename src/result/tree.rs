@@ -397,11 +397,33 @@ mod tests {
             .filter(|(_, sasa)| *sasa > 0.0)
             .collect();
 
-        println!("Diffs has {} ", diffs.len());
-        println!("Expected has {} ", expected_results.len());
+        // match range
+        let match_range = 147..=156;
 
-        println!("Diffs: {:#?}", diffs);
-        println!("Expected: {:#?}", expected_results);
+        // filter the match_range from the diffs
+        let diffs: HashMap<String, f64> = diffs
+            .into_iter()
+            .filter(|(res_id, _)| {
+                !match_range.contains(&res_id.parse().unwrap())
+            })
+            .collect();
+
+        assert_eq!(diffs.len(), expected_results.len());
+
+        // Check that the diffs are the same as the expected results
+        for (res_id, sasa) in diffs {
+            let diff = sasa
+                - expected_results.get(&res_id).unwrap_or_else(|| {
+                    panic!("No expected value for residue {}", res_id)
+                });
+
+            if diff.abs() > 0.0001 {
+                panic!(
+                    "SASA for residue {} is {}, expected {}",
+                    res_id, sasa, expected_results[&res_id]
+                );
+            }
+        }
     }
 
     #[test]
