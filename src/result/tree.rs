@@ -273,7 +273,6 @@ mod tests {
     use crate::result::node::NodeType;
     use crate::structure;
 
-    #[ignore = "getting different results from matt. Probably due to different files..."]
     #[test]
     fn test_sasa_tree_from_result() {
         let pdb =
@@ -287,38 +286,53 @@ mod tests {
                 .unwrap();
 
         // load the expected tree from a JSON file
-        let expected_tree: HashMap<String, f64> = serde_json::from_str(
-            &std::fs::read_to_string("data/3b7y_B_sasa.json").unwrap(),
-        )
-        .unwrap();
+        let expected_tree: HashMap<String, HashMap<String, f64>> =
+            serde_json::from_str(
+                &std::fs::read_to_string("data/3b7y_matt_sasa.json")
+                    .unwrap(),
+            )
+            .unwrap();
+
+        // Flatten keys
+        let expected_tree = expected_tree
+            .into_iter()
+            .flat_map(|(chain_key, value)| {
+                value.into_iter().map(move |(res_key, value)| {
+                    ((chain_key.clone(), res_key), value)
+                })
+            })
+            .collect::<HashMap<(String, String), f64>>();
 
         let nodes = tree
             .nodes()
             .filter(|node| node.nodetype() == &NodeType::Residue);
 
         for node in nodes {
-            let res_id = match node.uid().unwrap().res_id() {
-                Some(res_id) => res_id,
-                _ => panic!("NodeUID was not a ResidueUID!"),
-            };
+            let res_id = node.uid().unwrap();
             let sasa = node.area().unwrap().total();
 
             let diff = sasa
                 - expected_tree
-                    .get(&res_id.0.to_string())
+                    .get(&(
+                        res_id.chain().unwrap().to_string(),
+                        res_id.res_id().unwrap().0.to_string(),
+                    ))
                     .unwrap_or_else(|| {
                         panic!(
                             "No expected value for residue {}",
-                            res_id.0
+                            res_id
                         )
                     });
 
-            if diff.abs() > 20.0 {
+            if diff.abs() > 0.0001 {
                 panic!(
-                    "SASA for residue {} was {} but expected {}",
-                    res_id.0,
+                    "SASA for residue {} is {}, expected {}",
+                    res_id,
                     sasa,
-                    expected_tree[&res_id.0.to_string()]
+                    expected_tree[&(
+                        res_id.chain().unwrap().to_string(),
+                        res_id.res_id().unwrap().0.to_string()
+                    )]
                 );
             }
         }
@@ -388,5 +402,17 @@ mod tests {
 
         println!("Diffs: {:#?}", diffs);
         println!("Expected: {:#?}", expected_results);
+    }
+
+    #[test]
+    fn test_serialise() {
+        let base_pdb =
+            structure::Structure::from_path("data/3b7y_matt.pdb", None)
+                .unwrap();
+
+        let base_tree =
+            base_pdb.calculate_sasa_tree(&NodeType::Residue).unwrap();
+
+        let _ = serde_json::to_string(&base_tree).unwrap();
     }
 }
