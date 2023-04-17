@@ -52,12 +52,17 @@ impl SasaTree {
                 unsafe { freesasa_node_children(structure_ptr) };
         }
 
-        let tree = Self::recursive_build(structure_ptr, depth);
+        let mut root = Self {
+            node: unsafe { Node::from_ptr(structure_ptr) },
+            children: None,
+        };
+
+        Self::recursive_build(&mut root, structure_ptr, depth);
 
         trace!("SasaTree::new(): Freeing C node pointer {:p}", c_node);
         unsafe { freesasa_node_free(c_node) };
 
-        tree
+        root
     }
 
     /// Creates a new [`SasaTree`] from a [`SasaResult`].
@@ -98,62 +103,59 @@ impl SasaTree {
         Ok(Self::new(root, depth))
     }
 
+    /// Depth-first recursive build of the tree.
     fn recursive_build(
+        root: &mut SasaTree,
         c_node: *mut freesasa_node,
         depth: &NodeType,
-    ) -> Self {
-        let mut current_pointer = c_node;
+    ) {
+        // Get the children of the current node,
+        // and add them to the tree.
 
-        let mut child_map = HashMap::new();
+        // Then recursively call this function on each child.
 
-        while !current_pointer.is_null() {
-            let node = unsafe { Node::from_ptr(current_pointer) };
+        let mut children = VecDeque::new();
 
-            let uid = node.uid().map(|uid| uid.to_owned());
+        let mut child_ptr = unsafe { freesasa_node_children(c_node) };
 
-            let uid = match uid {
-                Some(uid) => uid,
-                None => continue,
-            };
+        while !child_ptr.is_null() {
+            children.push_back(child_ptr);
+            child_ptr = unsafe { freesasa_node_next(child_ptr) };
+        }
 
-            let nodetype = node.nodetype();
+        if children.is_empty() {
+            return;
+        }
 
-            if nodetype == depth {
-                child_map.insert(
-                    uid,
-                    Self {
-                        node: unsafe {
-                            Node::from_ptr(current_pointer)
-                        },
+        let mut children_map = HashMap::new();
+
+        for child in children {
+            let child_node = unsafe { Node::from_ptr(child) };
+
+            if child_node.nodetype() == depth {
+                children_map.insert(
+                    child_node.uid().unwrap().to_owned(),
+                    SasaTree {
+                        node: child_node,
                         children: None,
                     },
                 );
             } else {
-                let children =
-                    unsafe { freesasa_node_children(current_pointer) };
+                let mut child_tree = SasaTree {
+                    node: child_node,
+                    children: None,
+                };
 
-                if !children.is_null() {
-                    child_map.insert(
-                        uid,
-                        Self::recursive_build(children, depth),
-                    );
-                }
+                Self::recursive_build(&mut child_tree, child, depth);
+
+                children_map.insert(
+                    child_tree.node.uid().unwrap().to_owned(),
+                    child_tree,
+                );
             }
-
-            current_pointer =
-                unsafe { freesasa_node_next(current_pointer) };
         }
 
-        let child_map = if child_map.is_empty() {
-            None
-        } else {
-            Some(child_map)
-        };
-
-        Self {
-            node: unsafe { Node::from_ptr(c_node) },
-            children: child_map,
-        }
+        root.children = Some(children_map);
     }
 
     // ------- //
@@ -285,6 +287,31 @@ mod tests {
             SasaTree::from_result(&result, &pdb, &NodeType::Residue)
                 .unwrap();
 
+        // Check that the tree has the correct number of layers
+        assert_eq!(tree.node.nodetype(), &NodeType::Structure);
+        assert_eq!(tree.children.as_ref().unwrap().len(), 2); // chains
+
+        let chain_a = tree
+            .children
+            .as_ref()
+            .unwrap()
+            .get(&NodeUid::new('A', None, None))
+            .unwrap();
+
+        assert_eq!(chain_a.node.nodetype(), &NodeType::Chain);
+
+        let chain_b = tree
+            .children
+            .as_ref()
+            .unwrap()
+            .get(&NodeUid::new('B', None, None))
+            .unwrap();
+
+        assert_eq!(chain_b.node.nodetype(), &NodeType::Chain);
+
+        assert_eq!(chain_a.children.as_ref().unwrap().len(), 144); // residues
+        assert_eq!(chain_b.children.as_ref().unwrap().len(), 146); // residues
+
         // load the expected tree from a JSON file
         let expected_tree: HashMap<String, HashMap<String, f64>> =
             serde_json::from_str(
@@ -307,6 +334,7 @@ mod tests {
             .nodes()
             .filter(|node| node.nodetype() == &NodeType::Residue);
 
+        // Varify the calculations against values calculated using Python
         for node in nodes {
             let res_id = node.uid().unwrap();
             let sasa = node.area().unwrap().total();
@@ -314,7 +342,7 @@ mod tests {
             let diff = sasa
                 - expected_tree
                     .get(&(
-                        res_id.chain().unwrap().to_string(),
+                        res_id.chain().to_string(),
                         res_id.res_id().unwrap().0.to_string(),
                     ))
                     .unwrap_or_else(|| {
@@ -324,13 +352,16 @@ mod tests {
                         )
                     });
 
+            // Allow a small difference since we seem to get
+            // slightly different results, I think it is because
+            // of floating point rounding errors.
             if diff.abs() > 0.0001 {
                 panic!(
                     "SASA for residue {} is {}, expected {}",
                     res_id,
                     sasa,
                     expected_tree[&(
-                        res_id.chain().unwrap().to_string(),
+                        res_id.chain().to_string(),
                         res_id.res_id().unwrap().0.to_string()
                     )]
                 );
