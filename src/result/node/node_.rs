@@ -100,6 +100,7 @@ impl NodeType {
     }
 
     pub(crate) fn nodetype_of_ptr(node: *const freesasa_node) -> Self {
+        #[cfg(debug_assertions)]
         assert!(!node.is_null());
         let level = unsafe { freesasa_node_type(node) };
         NodeType::from_fs_level(level)
@@ -201,8 +202,10 @@ impl NodeArea {
                 })
             );
         }
-
         let area_ptr = unsafe { freesasa_node_area(*node) };
+
+        #[cfg(debug_assertions)]
+        assert!(!area_ptr.is_null(), "Node area pointer is null");
 
         let total = unsafe { (*area_ptr).total };
         let main_chain = unsafe { (*area_ptr).main_chain };
@@ -289,22 +292,32 @@ impl Node {
         }
     }
 
-    pub(crate) unsafe fn from_ptr(node: &*mut freesasa_node) -> Self {
+    pub(crate) unsafe fn from_ptr(node: *mut freesasa_node) -> Self {
         let nodetype =
-            NodeType::from_fs_level(freesasa_node_type(*node));
+            NodeType::from_fs_level(freesasa_node_type(node));
 
         match nodetype {
-            NodeType::Atom => new_atom_node(node),
-            NodeType::Residue => new_residue_node(node),
-            NodeType::Chain => new_chain_node(node),
-            NodeType::Structure => new_structure_node(node),
+            NodeType::Atom => new_node(node, nodetype, |n| {
+                NodeProperties::Atom(AtomProperties::new(n))
+            }),
+            NodeType::Residue => new_node(node, nodetype, |n| {
+                NodeProperties::Residue(ResidueProperties::new(n))
+            }),
+            NodeType::Chain => new_node(node, nodetype, |n| {
+                NodeProperties::Chain(ChainProperties::new(n))
+            }),
+            NodeType::Structure => new_node(node, nodetype, |n| {
+                NodeProperties::Structure(StructureProperties::new(n))
+            }),
             NodeType::Root => Node {
                 nodetype: NodeType::Root,
                 properties: None,
                 area: None,
                 uid: None,
             },
-            NodeType::Result => new_result_node(node),
+            NodeType::Result => new_node(node, nodetype, |n| {
+                NodeProperties::Result(ResultProperties::new(n))
+            }),
             _ => panic!("Invalid node type: {:?}", nodetype),
         }
     }
@@ -330,112 +343,29 @@ impl Node {
     }
 }
 
-/// Constructs a new `Node` from a `freesasa_node` pointer,
-/// where the node type is known to be an atom.
-///
-/// # Panics
-/// If the node type is not an atom.
-fn new_atom_node(node: &*mut freesasa_node) -> Node {
-    assert_nodetype(node, NodeType::Atom);
+fn new_node<P>(
+    node: *mut freesasa_node,
+    nodetype: NodeType,
+    properties_inialiser: P,
+) -> Node
+where
+    P: FnOnce(&*mut freesasa_node) -> NodeProperties,
+{
+    assert_nodetype(&node, nodetype);
 
-    let properties = AtomProperties::new(node);
-    let area = NodeArea::new_from_node(node);
+    let properties = properties_inialiser(&node);
 
-    let uid = NodeUid::new(
-        properties.residue.chain.structure,
-        Some(properties.residue.chain.id),
-        Some((properties.residue.resnum, properties.residue.inscode)),
-        Some(properties.name.clone()),
-    );
+    let area = match nodetype {
+        NodeType::Result => None,
+        _ => Some(NodeArea::new_from_node(&node)),
+    };
+
+    let uid = NodeUid::from_ptr(node);
 
     Node {
-        properties: Some(NodeProperties::Atom(properties)),
-        area: Some(area),
+        properties: Some(properties),
+        area,
         uid,
-        nodetype: NodeType::Atom,
-    }
-}
-
-/// Constructs a new `Node` from a `freesasa_node` pointer,
-/// where the node type is known to be a residue.
-///
-/// # Panics
-/// If the node type is not a residue.
-fn new_residue_node(node: &*mut freesasa_node) -> Node {
-    assert_nodetype(node, NodeType::Residue);
-
-    let properties = ResidueProperties::new(node);
-    let area = NodeArea::new_from_node(node);
-
-    let uid = NodeUID::Residue(ResidueUID::new(
-        properties.chain.structure,
-        properties.chain.id,
-        properties.resnum,
-        properties.inscode,
-    ));
-
-    Node {
-        properties: Some(NodeProperties::Residue(properties)),
-        area: Some(area),
-        uid,
-        nodetype: NodeType::Residue,
-    }
-}
-
-/// Constructs a new `Node` from a `freesasa_node` pointer,
-/// where the node type is known to be a chain.
-///
-/// # Panics
-/// If the node type is not a chain.
-fn new_chain_node(node: &*mut freesasa_node) -> Node {
-    assert_nodetype(node, NodeType::Chain);
-
-    let properties = ChainProperties::new(node);
-    let area = NodeArea::new_from_node(node);
-
-    let uid = NodeUID::Chain(ChainUID::new(
-        properties.structure,
-        properties.id,
-    ));
-
-    Node {
-        properties: Some(NodeProperties::Chain(properties)),
-        area: Some(area),
-        uid,
-        nodetype: NodeType::Chain,
-    }
-}
-
-/// Constructs a new `Node` from a `freesasa_node` pointer,
-/// where the node type is known to be a structure.
-///
-/// # Panics
-/// If the node type is not a structure.
-fn new_structure_node(node: &*mut freesasa_node) -> Node {
-    assert_nodetype(node, NodeType::Structure);
-
-    let properties = StructureProperties::new(node);
-    let area = NodeArea::new_from_node(node);
-
-    let uid = NodeUID::Structure(properties.name.clone());
-
-    Node {
-        properties: Some(NodeProperties::Structure(properties)),
-        area: Some(area),
-        uid,
-        nodetype: NodeType::Structure,
-    }
-}
-
-fn new_result_node(node: &*mut freesasa_node) -> Node {
-    assert_nodetype(node, NodeType::Result);
-
-    let properties = ResultProperties::new(node);
-
-    Node {
-        properties: Some(NodeProperties::Result(properties)),
-        area: None,
-        uid: NodeUID::Result,
-        nodetype: NodeType::Result,
+        nodetype,
     }
 }

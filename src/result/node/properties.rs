@@ -33,13 +33,6 @@ impl AtomProperties {
             panic!("Invalid atom name");
         }
 
-        let name = unsafe {
-            CStr::from_ptr(name)
-                .to_str()
-                .expect("Atom name containted invalid UTF-8 bytes")
-                .to_owned()
-        };
-
         let radius = unsafe { freesasa_node_atom_radius(*node) };
 
         let is_polar =

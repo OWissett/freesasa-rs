@@ -1,14 +1,18 @@
-use core::ffi;
+use std::ffi;
 use std::fmt::Display;
 
 use freesasa_sys::{
-    freesasa_node, freesasa_node_name, freesasa_node_structure_model,
+    freesasa_node, freesasa_node_name, freesasa_node_parent,
+    freesasa_node_residue_number, freesasa_node_structure_model,
 };
 
 use crate::{result::node::NodeType, utils::assert_nodetype};
 
 /// ID for a residue, which is a tuple of the residue number and insertion code.
 type ResID = (i32, Option<char>);
+
+// Structure, chain, residue, atom
+type UidPrimitive = (i32, Option<char>, Option<ResID>, Option<String>);
 
 /// Unique ID for a structure node (e.g. a chain, residue, atom, etc.).
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -29,11 +33,9 @@ pub struct NodeUid {
 }
 
 impl NodeUid {
-    pub(crate) fn new(
-        structure: i32,
-        chain: Option<char>,
-        res_id: Option<ResID>,
-        atom_name: Option<String>,
+    // Create a new `NodeUid` from a `UidPrimitive`.
+    fn new(
+        (structure, chain, res_id, atom_name): UidPrimitive,
     ) -> Self {
         #[cfg(debug_assertions)]
         {
@@ -68,10 +70,18 @@ impl NodeUid {
         let node_type = NodeType::nodetype_of_ptr(node);
 
         match node_type {
-            NodeType::Structure => Some(Self::from_structure_ptr(node)),
-            NodeType::Chain => Some(Self::from_chain_ptr(node)),
-            NodeType::Residue => Some(Self::from_residue_ptr(node)),
-            NodeType::Atom => Some(Self::from_atom_ptr(node)),
+            NodeType::Structure => {
+                Some(Self::new(Self::from_structure_ptr(node)))
+            }
+            NodeType::Chain => {
+                Some(Self::new(Self::from_chain_ptr(node)))
+            }
+            NodeType::Residue => {
+                Some(Self::new(Self::from_residue_ptr(node)))
+            }
+            NodeType::Atom => {
+                Some(Self::new(Self::from_atom_ptr(node)))
+            }
             NodeType::None => None,
             NodeType::Result => None,
             NodeType::Root => None,
@@ -94,20 +104,22 @@ impl NodeUid {
         self.atom_name.as_deref()
     }
 
-    fn from_structure_ptr(node: *mut freesasa_node) -> Self {
+    fn from_structure_ptr(node: *mut freesasa_node) -> UidPrimitive {
         #[cfg(debug_assertions)]
         assert_nodetype(&node, NodeType::Structure);
 
         let structure = unsafe { freesasa_node_structure_model(node) };
 
-        Self::new(structure, None, None, None)
+        (structure, None, None, None)
     }
 
-    fn from_chain_ptr(node: *mut freesasa_node) -> Self {
+    fn from_chain_ptr(node: *mut freesasa_node) -> UidPrimitive {
         #[cfg(debug_assertions)]
         assert_nodetype(&node, NodeType::Chain);
 
-        let structure = unsafe { freesasa_node_structure_model(node) };
+        let structure = unsafe {
+            freesasa_node_structure_model(freesasa_node_parent(node))
+        };
         let chain = unsafe { freesasa_node_name(node) };
 
         // convert from c-style string to String
@@ -123,7 +135,60 @@ impl NodeUid {
             );
         }
 
-        Self::new(structure, chain, None, None)
+        (structure, chain, None, None)
+    }
+
+    fn from_residue_ptr(node: *mut freesasa_node) -> UidPrimitive {
+        #[cfg(debug_assertions)]
+        assert_nodetype(&node, NodeType::Residue);
+
+        let chain_ptr = unsafe { freesasa_node_parent(node) };
+
+        let mut uid = Self::from_chain_ptr(chain_ptr);
+
+        let res_id = unsafe { freesasa_node_residue_number(node) };
+
+        // convert from c-style string to String
+        let res_id = unsafe {
+            ffi::CStr::from_ptr(res_id)
+                .to_str()
+                .expect("Residue number containted invalid UTF-8 bytes")
+                .trim()
+                .to_owned()
+        };
+
+        let (resnum, inscode) =
+            if res_id.chars().last().unwrap().is_numeric() {
+                (res_id, None)
+            } else {
+                let resnum = res_id[..res_id.len() - 1].to_string();
+                let inscode = res_id.chars().last().unwrap();
+                (resnum, Some(inscode))
+            };
+
+        uid.2 = Some((resnum.parse().unwrap(), inscode));
+
+        uid
+    }
+
+    fn from_atom_ptr(node: *mut freesasa_node) -> UidPrimitive {
+        #[cfg(debug_assertions)]
+        assert_nodetype(&node, NodeType::Atom);
+
+        let residue_ptr = unsafe { freesasa_node_parent(node) };
+
+        let mut uid = Self::from_residue_ptr(residue_ptr);
+
+        let atom_name = unsafe { freesasa_node_name(node) };
+
+        // convert from c-style string to String
+        let atom_name = unsafe {
+            ffi::CStr::from_ptr(atom_name).to_str().unwrap().to_string()
+        };
+
+        uid.3 = Some(atom_name);
+
+        uid
     }
 }
 
