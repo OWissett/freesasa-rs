@@ -15,8 +15,11 @@ type ResID = (i32, Option<char>);
 type UidPrimitive = (i32, Option<char>, Option<ResID>, Option<String>);
 
 /// Unique ID for a structure node (e.g. a chain, residue, atom, etc.).
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, PartialOrd, Ord)]
 pub struct NodeUid {
+    // NOTE: The ordering of the fields is important, because it determines the
+    // precedence of the fields in derive `Ord` and `PartialOrd` implementations.
+    //
     /// This is technically the model number, but it's usually just 1.
     /// The node name of the structure node in `freesasa-sys` is the
     /// concatenation of the chain IDs, so we don't really need this.
