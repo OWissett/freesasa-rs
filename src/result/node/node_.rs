@@ -341,6 +341,10 @@ impl Node {
     pub fn set_area(&mut self, area: Option<NodeArea>) {
         self.area = area;
     }
+
+    pub fn take_area(&mut self) -> Option<NodeArea> {
+        self.area.take()
+    }
 }
 
 fn new_node<P>(
