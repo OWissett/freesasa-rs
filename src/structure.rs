@@ -1,6 +1,7 @@
 use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
+use crate::error::{FreesasaError, FreesasaErrorKind};
 use crate::free_raw_c_strings;
 use crate::result::node::NodeType;
 use crate::utils::{char_to_c_char, str_to_c_string};
@@ -153,10 +154,14 @@ impl Structure {
     ///
     pub fn new_empty(
         name: Option<&str>,
-    ) -> Result<Structure, &'static str> {
+    ) -> Result<Structure, FreesasaError> {
         let ptr = unsafe { freesasa_structure_new() };
         if ptr.is_null() {
-            return Err("Failed to create empty FSStructure: freesasa_structure_new returned a null pointer!");
+            return Err(FreesasaError::new(
+                "failed to create an empty Structure.",
+                FreesasaErrorKind::Structure,
+                None,
+            ));
         }
 
         let name = name.unwrap_or("Unnamed").to_string();

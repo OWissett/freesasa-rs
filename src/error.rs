@@ -1,14 +1,40 @@
 //! Custom error types used in this crate.
 
 use std::error::Error;
-use std::fmt;
+use std::fmt::{self, Display};
+
+#[derive(Debug, Clone, Copy)]
+pub enum FreesasaErrorKind {
+    Unknown,
+    Memory,
+    Io,
+    Parameter,
+    Structure,
+    Selection,
+    Ffi,
+}
+
+impl Display for FreesasaErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let kind = match self {
+            FreesasaErrorKind::Unknown => "Unknown",
+            FreesasaErrorKind::Memory => "Memory",
+            FreesasaErrorKind::Io => "I/O",
+            FreesasaErrorKind::Parameter => "Parameter",
+            FreesasaErrorKind::Structure => "Structure",
+            FreesasaErrorKind::Selection => "Selection",
+            FreesasaErrorKind::Ffi => "FFI",
+        };
+        write!(f, "{}", kind)
+    }
+}
 
 /// Error type for the `freesasa` crate.
 ///
 #[derive(Debug)]
 pub struct FreesasaError {
     message: String,
-    kind: Option<String>,
+    kind: FreesasaErrorKind,
     code: Option<i32>,
 }
 
@@ -22,7 +48,7 @@ impl FreesasaError {
     ///
     pub fn new(
         message: &str,
-        kind: Option<String>,
+        kind: FreesasaErrorKind,
         code: Option<i32>,
     ) -> FreesasaError {
         FreesasaError {
@@ -46,9 +72,9 @@ impl FreesasaError {
 impl fmt::Display for FreesasaError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut message = self.message.clone();
-        if let Some(kind) = &self.kind {
-            message = format!("{} ({})", message, kind);
-        }
+
+        message = format!("{} ({})", message, self.kind);
+
         if let Some(code) = &self.code {
             message = format!("{} ({})", message, code);
         }
@@ -67,7 +93,7 @@ impl From<std::io::Error> for FreesasaError {
     fn from(error: std::io::Error) -> Self {
         FreesasaError::new(
             &error.to_string(),
-            Some("io".to_owned()),
+            FreesasaErrorKind::Io,
             None,
         )
     }
@@ -77,7 +103,7 @@ impl From<std::ffi::NulError> for FreesasaError {
     fn from(error: std::ffi::NulError) -> Self {
         FreesasaError::new(
             &error.to_string(),
-            Some("ffi".to_owned()),
+            FreesasaErrorKind::Ffi,
             None,
         )
     }
@@ -87,7 +113,7 @@ impl From<std::string::FromUtf8Error> for FreesasaError {
     fn from(error: std::string::FromUtf8Error) -> Self {
         FreesasaError::new(
             &error.to_string(),
-            Some("string".to_owned()),
+            FreesasaErrorKind::Ffi,
             None,
         )
     }
