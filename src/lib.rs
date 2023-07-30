@@ -49,8 +49,6 @@ pub mod structure;
 pub mod uids;
 mod utils;
 
-use libc;
-
 // Bring the needed freesasa functions into scope
 use freesasa_sys::{
     freesasa_set_err_out, freesasa_set_verbosity,
