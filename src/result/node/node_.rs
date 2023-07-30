@@ -4,6 +4,7 @@
 //! the calculation. The enum is used to convert between the `freesasa_nodetype`
 //! enum used by the `freesasa-sys` library and the `NodeLevel` enum used by the
 //! `rust-sasa` library.
+//!
 
 use std::{
     ops::{Add, Sub},

@@ -86,6 +86,11 @@ impl Structure {
     /// For more details about the options field, read the FreeSASA C-API documentation for
     /// `freesasa_structure_from_pdb`
     ///
+    ///  ## Developers
+    ///
+    ///  This should probably be a internal function, with is wrapped,
+    ///  with something with explicit options, rather than a bitfield which isn't
+    ///  very Rusty.
     pub fn from_path(
         pdb_path: &str,
         options: Option<raw::c_int>,
@@ -235,7 +240,7 @@ impl Structure {
         if res_code == freesasa_error_codes_FREESASA_SUCCESS {
             Ok(())
         } else {
-            Err("Failed to add atom to structure")
+            Err("Failed to add atom to structure") // Here we should return a more useful error message
         }
     }
 
@@ -347,7 +352,7 @@ mod tests {
         freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
 
-    use crate::{classifier::DEFAULT_CLASSIFIER, set_fs_verbosity};
+    use crate::{classifier::DEFAULT_CLASSIFIER, set_verbosity};
 
     use super::*;
 
@@ -389,7 +394,7 @@ mod tests {
 
     #[test]
     fn add_atom() {
-        set_fs_verbosity(crate::FreesasaVerbosity::Silent);
+        set_verbosity(crate::FreesasaVerbosity::Silent);
         let atoms = vec![
             // Atom, ResName, ResNum, Chain, X, Y, Z
             ("N", "ASN", "1", 'A', 10.287, 10.947, 12.500),

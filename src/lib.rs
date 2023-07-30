@@ -49,9 +49,12 @@ pub mod structure;
 pub mod uids;
 mod utils;
 
+use libc;
+
 // Bring the needed freesasa functions into scope
 use freesasa_sys::{
-    freesasa_set_verbosity, freesasa_verbosity_FREESASA_V_DEBUG,
+    freesasa_set_err_out, freesasa_set_verbosity,
+    freesasa_verbosity_FREESASA_V_DEBUG,
     freesasa_verbosity_FREESASA_V_NORMAL,
     freesasa_verbosity_FREESASA_V_NOWARNINGS,
     freesasa_verbosity_FREESASA_V_SILENT,
@@ -65,7 +68,8 @@ pub enum FreesasaVerbosity {
     Silent,
 }
 
-pub fn set_fs_verbosity(verbosity: FreesasaVerbosity) {
+/// Sets the verbosity of the freesasa library.
+pub fn set_verbosity(verbosity: FreesasaVerbosity) {
     let verbosity = match verbosity {
         FreesasaVerbosity::Debug => freesasa_verbosity_FREESASA_V_DEBUG,
         FreesasaVerbosity::Info => freesasa_verbosity_FREESASA_V_NORMAL,
@@ -79,7 +83,32 @@ pub fn set_fs_verbosity(verbosity: FreesasaVerbosity) {
 
     debug!("Setting freesasa verbosity to {:?}", verbosity);
 
+    // We should also use this function to set the verbosity of
+    // the rust logging crate
+
     unsafe {
         freesasa_set_verbosity(verbosity);
     }
+}
+
+pub fn set_err_out(
+    file: Option<&std::path::Path>,
+) -> Result<(), &'static str> {
+    if let Some(file) = file {
+        debug!("Setting freesasa error output to {:?}", file);
+        let file =
+            std::ffi::CString::new(file.to_str().unwrap()).unwrap();
+        unsafe {
+            let mode = std::ffi::CString::new("w").unwrap();
+            let file_ptr =
+                freesasa_sys::fopen(file.as_ptr(), mode.as_ptr());
+
+            if file_ptr.is_null() {
+                return Err("Could not open file");
+            }
+
+            freesasa_set_err_out(file_ptr);
+        }
+    }
+    Ok(())
 }
