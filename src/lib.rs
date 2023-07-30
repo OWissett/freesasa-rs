@@ -17,10 +17,10 @@
 //!
 //! ## Example
 //! ```rust
-//! use freesasa_rs::{structure::Structure, FreesasaVerbosity, set_fs_verbosity};
+//! use freesasa_rs::{structure::Structure, FreesasaVerbosity, set_verbosity};
 //!
 //! // Set the verbosity of the freesasa library
-//! set_fs_verbosity(FreesasaVerbosity::Info);
+//! set_verbosity(FreesasaVerbosity::Info);
 //!
 //! // Create a new structure from a PDB file
 //! let structure = Structure::from_path("./data/single_chain.pdb", None).unwrap();

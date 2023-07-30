@@ -29,7 +29,7 @@ impl SasaResult {
     /// Do not use the pointer given after passing it to this function, since
     /// [`SasaResult`] is now responsible for the pointer.
     ///
-    pub unsafe fn new(
+    pub(crate) unsafe fn new(
         ptr: *mut freesasa_result,
     ) -> Result<SasaResult, &'static str> {
         if ptr.is_null() {
