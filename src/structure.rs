@@ -18,6 +18,7 @@ use crate::result::{SasaResult, SasaTree};
 pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
     0 as raw::c_int;
 
+/// Set the default behaviour for SASA calculation
 pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
     *const freesasa_parameters = ptr::null();
 

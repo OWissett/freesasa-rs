@@ -43,6 +43,7 @@
 extern crate log;
 
 pub mod classifier;
+pub mod error;
 pub mod result;
 pub mod selection;
 pub mod structure;
