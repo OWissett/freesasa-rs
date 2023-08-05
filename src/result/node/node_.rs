@@ -29,8 +29,11 @@ use super::properties::{
     ResultProperties, StructureProperties,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, Default,
+)]
 pub enum NodeType {
+    #[default]
     None,
     Atom,
     Residue,
@@ -38,12 +41,6 @@ pub enum NodeType {
     Structure,
     Result,
     Root,
-}
-
-impl Default for NodeType {
-    fn default() -> Self {
-        NodeType::None
-    }
 }
 
 impl FromStr for NodeType {
