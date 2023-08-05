@@ -29,7 +29,7 @@ impl SasaResult {
     /// Do not use the pointer given after passing it to this function, since
     /// [`SasaResult`] is now responsible for the pointer.
     ///
-    pub unsafe fn new(
+    pub(crate) unsafe fn new(
         ptr: *mut freesasa_result,
     ) -> Result<SasaResult, &'static str> {
         if ptr.is_null() {
@@ -151,7 +151,7 @@ impl<'a> Iterator for SasaResultIter<'a> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{set_fs_verbosity, structure, FreesasaVerbosity};
+    use crate::{set_verbosity, structure, FreesasaVerbosity};
 
     use super::*;
 
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_atom_sasa() {
-        set_fs_verbosity(FreesasaVerbosity::Debug);
+        set_verbosity(FreesasaVerbosity::Debug);
 
         let structure = structure::Structure::from_path(
             "./data/single_chain.pdb",
