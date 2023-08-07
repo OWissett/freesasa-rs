@@ -380,8 +380,8 @@ mod tests {
         let tree_pdbtbx = pdb_from_pdbtbx.calculate_sasa().unwrap();
         let tree_path = pdb_from_path.calculate_sasa().unwrap();
 
-        let percent_diff = (tree_pdbtbx.total - tree_path.total)
-            / tree_pdbtbx.total
+        let percent_diff = (tree_pdbtbx.total() - tree_path.total())
+            / tree_pdbtbx.total()
             * 100.0;
 
         assert!(percent_diff < 0.1);
@@ -422,7 +422,7 @@ mod tests {
                 .unwrap();
         }
 
-        let full_sasa = structure.calculate_sasa().unwrap().total;
+        let full_sasa = structure.calculate_sasa().unwrap().total();
 
         println!("full: {}\n\n", full_sasa);
 
