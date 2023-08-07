@@ -1,5 +1,7 @@
 # RustSASA
 
+This crate is currently in development and the API is unstable and may change. The package is not currently listed on crates.io but will be in the future.
+
 Rust FFI bindings for `freesasa` C-API.
 
 ## Requirements
@@ -20,7 +22,7 @@ All of the following are availible as `apt` packages:
 
 Availible as `brew` packages:
 
-* XCode should needs to be installed for C/C++ compilers and libraries
+* XCode should be installed for C/C++ compilers and libraries
 * `automake`
 
 At the point of testing, I have lots of other tools installed on my mac, so
@@ -31,6 +33,4 @@ list).
 
 ## Install
 
-As this package is not publicly availible, either add it to cargo.toml with
-a local path to it as a git submodule, or add the repo to the cargo.toml file (this will
-need Cargo to have the ability to use your credentials).
+Add this package using git to your Cargo.toml file. In the future it will be possible to simply use crates.io - but this has not been done yet.
