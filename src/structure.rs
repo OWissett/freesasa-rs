@@ -9,18 +9,76 @@ use freesasa_sys::{
     freesasa_classifier, freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_parameters, freesasa_structure,
     freesasa_structure_add_atom, freesasa_structure_free,
-    freesasa_structure_from_pdb, freesasa_structure_new,
+    freesasa_structure_from_pdb, freesasa_structure_new, freesasa_structure_options_FREESASA_INCLUDE_HETATM, freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN, freesasa_structure_options_FREESASA_SEPARATE_MODELS, freesasa_structure_options_FREESASA_SEPARATE_CHAINS, freesasa_structure_options_FREESASA_JOIN_MODELS, freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN, freesasa_structure_options_FREESASA_SKIP_UNKNOWN, freesasa_structure_options_FREESASA_RADIUS_FROM_OCCUPANCY,
 };
 
 use crate::result::{SasaResult, SasaTree};
 
+/// Bitfield to store structure loading options
+type OptionsBitfield = u32;
+
 /// Set the default behaviour for PDB loading
-pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
-    0 as raw::c_int;
+pub(crate) const DEFAULT_STRUCTURE_OPTIONS: OptionsBitfield =
+    0 as OptionsBitfield;
 
 /// Set the default behaviour for SASA calculation
 pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
     *const freesasa_parameters = ptr::null();
+
+#[derive(Debug)]
+pub struct StructureOptions {
+    bitfield: OptionsBitfield,
+}
+
+impl StructureOptions {
+    pub fn new(
+        include_hetatm: bool,
+        include_hydrogen: bool,
+        separate_models: bool,
+        separate_chains: bool,
+        join_models: bool,
+        halt_at_unknown: bool,
+        skip_unknown: bool,
+        radius_from_occupancy: bool,
+    ) -> Self {
+        let mut bitfield = 0 as OptionsBitfield;
+        if include_hetatm {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_INCLUDE_HETATM; 
+        }
+        if include_hydrogen {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN;
+        }
+        if separate_models {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_SEPARATE_MODELS;
+        }
+        if separate_chains {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_SEPARATE_CHAINS;
+        }
+        if join_models {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_JOIN_MODELS;
+        }
+        if halt_at_unknown {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN;
+        }
+        if skip_unknown {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_SKIP_UNKNOWN;
+        }
+        if radius_from_occupancy {
+            bitfield = bitfield | freesasa_structure_options_FREESASA_RADIUS_FROM_OCCUPANCY;
+        }
+        Self{
+            bitfield
+        }
+    }
+}
+
+impl Default for StructureOptions {
+    fn default() -> Self {
+        Self {
+            bitfield: 0 as OptionsBitfield
+        }
+    }
+}
 
 /// Simple Rust struct wrapper for freesasa_structure object.
 ///
@@ -94,7 +152,7 @@ impl Structure {
     ///  very Rusty.
     pub fn from_path(
         pdb_path: &str,
-        options: Option<raw::c_int>,
+        options: Option<StructureOptions>,
     ) -> Result<Structure, &'static str> {
         let pdb_name = *pdb_path
             .split('/')
@@ -108,7 +166,7 @@ impl Structure {
 
         // Bitfield
         let options =
-            options.unwrap_or(DEFAULT_STRUCTURE_OPTIONS) as raw::c_int;
+            options.unwrap_or_default().bitfield as raw::c_int;
 
         // Define the file path and read mode as raw pointers
         let pdb_path = str_to_c_string(pdb_path)?.into_raw();
@@ -360,7 +418,7 @@ mod tests {
     #[test]
     fn from_path() {
         let _ =
-            Structure::from_path("./data/single_chain.pdb", Some(0))
+            Structure::from_path("./data/single_chain.pdb", Some(StructureOptions::default()))
                 .unwrap();
     }
 
@@ -432,7 +490,7 @@ mod tests {
     #[test]
     fn test_get_chains() {
         let structure =
-            Structure::from_path("./data/multi_chain.pdb", Some(0))
+            Structure::from_path("./data/multi_chain.pdb", Some(StructureOptions::default()))
                 .unwrap();
 
         let chains = ffi::CString::new("P").unwrap();

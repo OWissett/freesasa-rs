@@ -29,7 +29,7 @@
 //! let result = structure.calculate_sasa().unwrap();
 //!
 //! // Print the SASA for each atom
-//! let atom_sasa = result.atom_sasa();
+//! let atom_sasa = result.get_sasa();
 //! for (i, sasa) in atom_sasa.iter().enumerate() {
 //!    println!("Atom {}: {:.2}", i, sasa);
 //! }
