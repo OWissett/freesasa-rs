@@ -18,6 +18,7 @@ use crate::result::{SasaResult, SasaTree};
 pub(crate) const DEFAULT_STRUCTURE_OPTIONS: raw::c_int =
     0 as raw::c_int;
 
+/// Set the default behaviour for SASA calculation
 pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
     *const freesasa_parameters = ptr::null();
 
@@ -86,6 +87,11 @@ impl Structure {
     /// For more details about the options field, read the FreeSASA C-API documentation for
     /// `freesasa_structure_from_pdb`
     ///
+    ///  ## Developers
+    ///
+    ///  This should probably be a internal function, with is wrapped,
+    ///  with something with explicit options, rather than a bitfield which isn't
+    ///  very Rusty.
     pub fn from_path(
         pdb_path: &str,
         options: Option<raw::c_int>,
@@ -235,7 +241,7 @@ impl Structure {
         if res_code == freesasa_error_codes_FREESASA_SUCCESS {
             Ok(())
         } else {
-            Err("Failed to add atom to structure")
+            Err("Failed to add atom to structure") // Here we should return a more useful error message
         }
     }
 
@@ -270,7 +276,7 @@ impl Structure {
             return Err("freesasa_calc_tree returned a null pointer!");
         }
 
-        Ok(SasaTree::from_ptr(root, depth))
+        Ok(SasaTree::new(root, depth))
     }
 
     /// Returns a string slice to the name of the structure
@@ -347,7 +353,7 @@ mod tests {
         freesasa_structure_chain_labels, freesasa_structure_get_chains,
     };
 
-    use crate::{classifier::DEFAULT_CLASSIFIER, set_fs_verbosity};
+    use crate::{classifier::DEFAULT_CLASSIFIER, set_verbosity};
 
     use super::*;
 
@@ -374,8 +380,8 @@ mod tests {
         let tree_pdbtbx = pdb_from_pdbtbx.calculate_sasa().unwrap();
         let tree_path = pdb_from_path.calculate_sasa().unwrap();
 
-        let percent_diff = (tree_pdbtbx.total - tree_path.total)
-            / tree_pdbtbx.total
+        let percent_diff = (tree_pdbtbx.total() - tree_path.total())
+            / tree_pdbtbx.total()
             * 100.0;
 
         assert!(percent_diff < 0.1);
@@ -389,7 +395,7 @@ mod tests {
 
     #[test]
     fn add_atom() {
-        set_fs_verbosity(crate::FreesasaVerbosity::Silent);
+        set_verbosity(crate::FreesasaVerbosity::Silent);
         let atoms = vec![
             // Atom, ResName, ResNum, Chain, X, Y, Z
             ("N", "ASN", "1", 'A', 10.287, 10.947, 12.500),
@@ -416,7 +422,7 @@ mod tests {
                 .unwrap();
         }
 
-        let full_sasa = structure.calculate_sasa().unwrap().total;
+        let full_sasa = structure.calculate_sasa().unwrap().total();
 
         println!("full: {}\n\n", full_sasa);
 

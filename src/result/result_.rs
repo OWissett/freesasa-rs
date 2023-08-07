@@ -8,14 +8,6 @@ pub struct SasaResult {
     /// Pointer to C-API object
     ptr: *mut freesasa_result,
 
-    /// Total SASA value
-    pub total: f64,
-
-    /// Pointer to underlying C-API SASA array
-    sasa_ptr: *mut f64,
-
-    /// Number of atoms in the structure
-    pub n_atoms: i32,
 }
 
 impl SasaResult {
@@ -29,38 +21,47 @@ impl SasaResult {
     /// Do not use the pointer given after passing it to this function, since
     /// [`SasaResult`] is now responsible for the pointer.
     ///
-    pub unsafe fn new(
+    pub(crate) fn new(
         ptr: *mut freesasa_result,
     ) -> Result<SasaResult, &'static str> {
         if ptr.is_null() {
-            return Err("Null pointer was given to FSResult::new");
+            return Err("Null pointer was given to SasaResult::new");
         }
 
         #[cfg(feature = "nightly-features")]
         if !ptr.is_aligned() {
             return Err(
-                "Incorrectly aligned pointer was given to FSResult::new",
+                "Incorrectly aligned pointer was given to SasaResult::new",
             );
         }
 
-        let total = (*ptr).total;
-        let sasa_ptr = (*ptr).sasa;
-        let n_atoms = (*ptr).n_atoms;
-
         Ok(SasaResult {
             ptr,
-            total,
-            sasa_ptr,
-            n_atoms,
         })
     }
 
+    /// Total SASA value for the result
+    pub(crate) fn total(&self) -> f64 {
+        unsafe {(*self.ptr).total}
+    }
+
+    /// Total number of atoms in the structure for the result
+    pub(crate) fn n_atoms(&self) -> i32 {
+        unsafe {(*self.ptr).n_atoms}
+    }
+
+    /// Pointer to array of SASA values for each atom in the result
+    fn sasa_ptr(&self) -> *const f64 {
+        unsafe {(*self.ptr).sasa}
+    }
+
     /// Returns a vector of SASA values for each ATOM in the molecule
-    pub fn atom_sasa(&self) -> Vec<f64> {
-        let mut v: Vec<f64> = Vec::with_capacity(self.n_atoms as usize);
-        for i in 0..self.n_atoms {
+    /// This creates a new copy of the data and operates in O(n) time
+    pub fn get_sasa(&self) -> Vec<f64> {
+        let mut v: Vec<f64> = Vec::with_capacity(self.n_atoms() as usize);
+        for i in 0..self.n_atoms() {
             unsafe {
-                v.push(*self.sasa_ptr.offset(i as isize));
+                v.push(*self.sasa_ptr().offset(i as isize));
             }
         }
         v
@@ -104,11 +105,11 @@ impl SasaResult {
 
     /// Returns the SASA value for the atom at the given index
     pub fn get(&self, index: usize) -> Option<f64> {
-        if index >= self.n_atoms as usize {
+        if index >= self.n_atoms() as usize {
             return None;
         }
 
-        Some(unsafe { *self.sasa_ptr.add(index) })
+        Some(unsafe { *self.sasa_ptr().add(index) })
     }
 }
 
@@ -125,7 +126,7 @@ impl Drop for SasaResult {
 
 impl fmt::Display for SasaResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.total)
+        write!(f, "{}", self.total())
     }
 }
 
@@ -138,11 +139,11 @@ impl<'a> Iterator for SasaResultIter<'a> {
     type Item = f64;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.result.n_atoms as usize {
+        if self.index >= self.result.n_atoms() as usize {
             return None;
         }
 
-        let value = unsafe { *self.result.sasa_ptr.add(self.index) };
+        let value = unsafe { *self.result.sasa_ptr().add(self.index) };
         self.index += 1;
         Some(value)
     }
@@ -151,14 +152,14 @@ impl<'a> Iterator for SasaResultIter<'a> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{set_fs_verbosity, structure, FreesasaVerbosity};
+    use crate::{set_verbosity, structure, FreesasaVerbosity};
 
     use super::*;
 
     #[test]
     fn test_new() {
         let ptr = std::ptr::null_mut();
-        let result = unsafe { SasaResult::new(ptr) };
+        let result = { SasaResult::new(ptr) };
         assert!(result.is_err());
 
         let structure = structure::Structure::from_path(
@@ -172,7 +173,7 @@ mod tests {
 
     #[test]
     fn test_atom_sasa() {
-        set_fs_verbosity(FreesasaVerbosity::Debug);
+        set_verbosity(FreesasaVerbosity::Debug);
 
         let structure = structure::Structure::from_path(
             "./data/single_chain.pdb",
@@ -181,7 +182,7 @@ mod tests {
         .unwrap();
 
         let result = structure.calculate_sasa().unwrap();
-        let sasa = result.atom_sasa();
+        let sasa = result.get_sasa();
 
         assert_eq!(sasa.len(), 1911);
     }
@@ -199,13 +200,13 @@ mod tests {
         assert_eq!(result.iter().count(), 1911);
 
         let sasa = result.iter().sum::<f64>();
-        assert_eq!(sasa, result.total);
+        assert_eq!(sasa, result.total());
 
         let sasa = result.iter().fold(0.0, |acc, x| acc + x);
-        assert_eq!(sasa, result.total);
+        assert_eq!(sasa, result.total());
 
         let sasa = result.iter().map(|x| x * 2.0).sum::<f64>();
-        assert_eq!(sasa, result.total * 2.0);
+        assert_eq!(sasa, result.total() * 2.0);
 
         let sasa_count = result.iter().filter(|x| *x > 0.0).count();
         assert_eq!(sasa_count, 901);
