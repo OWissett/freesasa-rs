@@ -9,7 +9,15 @@ use freesasa_sys::{
     freesasa_classifier, freesasa_error_codes_FREESASA_SUCCESS,
     freesasa_parameters, freesasa_structure,
     freesasa_structure_add_atom, freesasa_structure_free,
-    freesasa_structure_from_pdb, freesasa_structure_new, freesasa_structure_options_FREESASA_INCLUDE_HETATM, freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN, freesasa_structure_options_FREESASA_SEPARATE_MODELS, freesasa_structure_options_FREESASA_SEPARATE_CHAINS, freesasa_structure_options_FREESASA_JOIN_MODELS, freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN, freesasa_structure_options_FREESASA_SKIP_UNKNOWN, freesasa_structure_options_FREESASA_RADIUS_FROM_OCCUPANCY,
+    freesasa_structure_from_pdb, freesasa_structure_new,
+    freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN,
+    freesasa_structure_options_FREESASA_INCLUDE_HETATM,
+    freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN,
+    freesasa_structure_options_FREESASA_JOIN_MODELS,
+    freesasa_structure_options_FREESASA_RADIUS_FROM_OCCUPANCY,
+    freesasa_structure_options_FREESASA_SEPARATE_CHAINS,
+    freesasa_structure_options_FREESASA_SEPARATE_MODELS,
+    freesasa_structure_options_FREESASA_SKIP_UNKNOWN,
 };
 
 use crate::result::{SasaResult, SasaTree};
@@ -25,12 +33,29 @@ pub(crate) const DEFAULT_STRUCTURE_OPTIONS: OptionsBitfield =
 pub(crate) const DEFAULT_CALCULATION_PARAMETERS:
     *const freesasa_parameters = ptr::null();
 
+/// Rust struct wrapper for options when creating freesasa_structure object
+/// Uses OptionsBitfield type to set booleans for freesasa_structure,
+/// regarding options that can be included as a bitfield
+/// when instantiated from a path to a pdb
 #[derive(Debug)]
 pub struct StructureOptions {
+    /// Bitfield to determine options for freesasa_structure object
     bitfield: OptionsBitfield,
 }
 
 impl StructureOptions {
+    /// Creates bitfield for freesasa_structure when instantiated from pdb,
+    /// regarding the building of a freesasa_structure object
+    ///
+    /// ## Arguments
+    /// * `include_hetam` - Boolean regarding inclusion of HETATM entries
+    /// * `include_hydrogen` - Boolean regarding inclusion of hydrogen atoms
+    /// * `separate_models` - Boolean regarding reading MODELs as different structures
+    /// * `jseparate_chains` - Boolean regarding reading separate chains as separate structures
+    /// * `join_models` - Boolean regarding reading MODELs as part of on structure
+    /// * `halt_at_unknown` - Boolean regarding halting reading when unknown atom is encountered
+    /// * `skip_unknown` - Boolean regarding skipping current atom when unknown atom is encountered
+    /// * `radius_from_occupancy` - Boolean regarding reading atom radius from occupancy field
     pub fn new(
         include_hetatm: bool,
         include_hydrogen: bool,
@@ -43,39 +68,45 @@ impl StructureOptions {
     ) -> Self {
         let mut bitfield = 0 as OptionsBitfield;
         if include_hetatm {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_INCLUDE_HETATM; 
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_INCLUDE_HETATM;
         }
         if include_hydrogen {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN;
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN;
         }
         if separate_models {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_SEPARATE_MODELS;
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_SEPARATE_MODELS;
         }
         if separate_chains {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_SEPARATE_CHAINS;
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_SEPARATE_CHAINS;
         }
         if join_models {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_JOIN_MODELS;
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_JOIN_MODELS;
         }
         if halt_at_unknown {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN;
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN;
         }
         if skip_unknown {
-            bitfield = bitfield | freesasa_structure_options_FREESASA_SKIP_UNKNOWN;
+            bitfield = bitfield
+                | freesasa_structure_options_FREESASA_SKIP_UNKNOWN;
         }
         if radius_from_occupancy {
             bitfield = bitfield | freesasa_structure_options_FREESASA_RADIUS_FROM_OCCUPANCY;
         }
-        Self{
-            bitfield
-        }
+        Self { bitfield }
     }
 }
 
 impl Default for StructureOptions {
+    /// Defaults StructureOptions bitfield to 0
     fn default() -> Self {
         Self {
-            bitfield: 0 as OptionsBitfield
+            bitfield: 0 as OptionsBitfield,
         }
     }
 }
@@ -417,9 +448,11 @@ mod tests {
 
     #[test]
     fn from_path() {
-        let _ =
-            Structure::from_path("./data/single_chain.pdb", Some(StructureOptions::default()))
-                .unwrap();
+        let _ = Structure::from_path(
+            "./data/single_chain.pdb",
+            Some(StructureOptions::default()),
+        )
+        .unwrap();
     }
 
     #[test]
@@ -489,9 +522,11 @@ mod tests {
 
     #[test]
     fn test_get_chains() {
-        let structure =
-            Structure::from_path("./data/multi_chain.pdb", Some(StructureOptions::default()))
-                .unwrap();
+        let structure = Structure::from_path(
+            "./data/multi_chain.pdb",
+            Some(StructureOptions::default()),
+        )
+        .unwrap();
 
         let chains = ffi::CString::new("P").unwrap();
 
