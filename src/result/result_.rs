@@ -57,7 +57,7 @@ impl SasaResult {
 
     /// Returns a vector of SASA values for each ATOM in the molecule
     /// This creates a new copy of the data and operates in O(n) time
-    pub fn get_sasa(&self) -> Vec<f64> {
+    pub fn atom_sasa(&self) -> Vec<f64> {
         let mut v: Vec<f64> = Vec::with_capacity(self.n_atoms() as usize);
         for i in 0..self.n_atoms() {
             unsafe {
