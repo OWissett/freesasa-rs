@@ -2,13 +2,17 @@
 name = "freesasa-rs"
 version = "0.1.3"
 edition = "2021"
+license-file = "license"
+repository = "https://github.com/OWissett/freesasa-rs"
+description = "Rust (safe) bindings for the freesasa library"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 log = "0.4.17"
 env_logger = "0.10.0"
-pdbtbx = { git = "https://github.com/OWissett/pdbtbx.git" }
+pdbtbx = "0.11.0"
 freesasa-sys = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
