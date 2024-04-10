@@ -182,7 +182,7 @@ mod tests {
         .unwrap();
 
         let result = structure.calculate_sasa().unwrap();
-        let sasa = result.atom_sasa();
+        let sasa = result.get_sasa();
 
         assert_eq!(sasa.len(), 1911);
     }
