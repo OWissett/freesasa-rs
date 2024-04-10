@@ -1,6 +1,10 @@
 # RustSASA
 
-Rust FFI bindings for `freesasa` C-API.
+High-level Rust FFI bindings for `freesasa` C-API. Currently the library provides all basic functionality of `freesasa` C-API.
+
+If you require lower level bindings, you can use `freesasa_sys` crate directly - this is not recommended unless you are sure what you are doing, as you require the use of `unsafe` Rust code and manual memory management of `C` objects.
+
+It is a work in progress and is not yet feature complete, as such, some functions may not be available and the API may change (although I will try to keep it as stable as possible).
 
 ## Requirements
 
@@ -20,7 +24,7 @@ All of the following are availible as `apt` packages:
 
 Availible as `brew` packages:
 
-* XCode should needs to be installed for C/C++ compilers and libraries
+* XCode should be installed for C/C++ compilers and libraries
 * `automake`
 
 At the point of testing, I have lots of other tools installed on my mac, so
@@ -31,6 +35,9 @@ list).
 
 ## Install
 
-As this package is not publicly availible, either add it to cargo.toml with
-a local path to it as a git submodule, or add the repo to the cargo.toml file (this will
-need Cargo to have the ability to use your credentials).
+Add the following to your `Cargo.toml`:
+
+```toml
+[dependencies]
+rustsasa = "0.1.1"
+```

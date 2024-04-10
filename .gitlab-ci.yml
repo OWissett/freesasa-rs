@@ -5,6 +5,10 @@ stages:
   - Build
   - Doc
 
+default:
+  tags:
+    - circe
+
 # Cache the rustup toolchain so that we don't
 # have to download it every time
 .cache_toolchain: &cache_toolchain
