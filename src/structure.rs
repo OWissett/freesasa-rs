@@ -1,5 +1,3 @@
-use std::ffi::{OsStr, OsString};
-use std::str::FromStr;
 use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
@@ -59,7 +57,7 @@ impl StructureOptions {
     /// * `halt_at_unknown` - Boolean regarding halting reading when unknown atom is encountered
     /// * `skip_unknown` - Boolean regarding skipping current atom when unknown atom is encountered
     /// * `radius_from_occupancy` - Boolean regarding reading atom radius from occupancy field
-    fn new(
+    pub fn new(
         include_hetatm: bool,
         include_hydrogen: bool,
         separate_models: bool,
@@ -116,9 +114,91 @@ impl Default for StructureOptions {
 
 pub struct StructureBuilder {
     name: String,
-    options: Option<StructureOptions>,
+    path: String,
+    options: StructureOptions,
 }
 
+impl StructureBuilder {
+    /// Creates a new StructureBuilder object.
+    ///
+    /// Use this builder to create a new Structure object from a PDB file path.
+    ///
+    /// To then set the PDB parsing options, use the methods provided by this builder.
+    ///
+    /// Then finally, call the [`StructureBuilder::build`] method to create the Structure object.
+    ///
+    /// ## Example
+    /// ```rust no_run
+    /// use freesasa_rs::structure::StructureBuilder;
+    ///
+    /// let structure = StructureBuilder::new("test", "./data/7trr.pdb")
+    ///    .include_hetatm()
+    ///    .include_hydrogen()
+    ///    .separate_models()
+    ///    .build()
+    ///    .unwrap();
+    /// ```
+    pub fn new(name: &str, path: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            path: path.to_string(),
+            options: StructureOptions::default(),
+        }
+    }
+
+    pub fn new_with_options(name: &str, path: &str, options: StructureOptions) -> Self {
+        Self {
+            name: name.to_string(),
+            path: path.to_string(),
+            options,
+        }
+    }
+
+
+    pub fn include_hetatm(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_INCLUDE_HETATM;
+        self
+    }
+
+    pub fn include_hydrogen(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_INCLUDE_HYDROGEN;
+        self
+    }
+
+    pub fn separate_models(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_SEPARATE_MODELS;
+        self
+    }
+
+    pub fn separate_chains(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_SEPARATE_CHAINS;
+        self
+    }
+
+    pub fn join_models(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_JOIN_MODELS;
+        self
+    }
+
+    pub fn halt_at_unknown(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_HALT_AT_UNKNOWN;
+        self
+    }
+
+    pub fn skip_unknown(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_SKIP_UNKNOWN;
+        self
+    }
+
+    pub fn radius_from_occupancy(mut self) -> Self {
+        self.options.bitfield |= freesasa_structure_options_FREESASA_RADIUS_FROM_OCCUPANCY;
+        self
+    }
+
+    pub fn build(self) -> Result<Structure, FreesasaError> {
+        Structure::from_path(&self.path, Some(self.options))
+    }
+}
 
 
 /// Simple Rust struct wrapper for freesasa_structure object.
@@ -155,13 +235,16 @@ impl Structure {
     /// add atoms to the structure before attempting to calculate
     /// the SASA.
     ///
+    /// If you want to create a structure from a PDB file, use the
+    /// [`StructureBuilder`] instead.
+    ///
     /// ## Arguments
     /// * `name` - A string slice that provides the name of the pdb structure (default: "Unnamed")
     ///
     /// ## Errors
     /// * If [`freesasa_structure_new`] returns a null pointer - E.g., unable to allocate memory
     ///
-    pub fn new_empty(
+    pub fn new(
         name: Option<&str>,
     ) -> Result<Structure, FreesasaError> {
         let ptr = unsafe { freesasa_structure_new() };
@@ -190,10 +273,10 @@ impl Structure {
     /// For more details about the options field, read the FreeSASA C-API documentation for
     /// `freesasa_structure_from_pdb`
     ///
-    pub fn from_path(
+    pub(crate) fn from_path(
         pdb_path: &str,
         options: Option<StructureOptions>,
-    ) -> Result<Structure, &'static str> {
+    ) -> Result<Structure, FreesasaError> {
         let pdb_name = *pdb_path
             .split('/')
             .collect::<Vec<&str>>()
@@ -239,9 +322,15 @@ impl Structure {
         }
 
         if structure.is_null() {
-            return Err(
-                "Unable to load structure for given path, freesasa returned a null pointer!",
+            let msg = format!(
+                "Unable to load structure for given path: {}",
+                pdb_path
             );
+            return Err(FreesasaError::new(
+                &msg,
+                FreesasaErrorKind::Structure,
+                None,
+            ));
         }
 
         Ok(Structure {
@@ -253,13 +342,13 @@ impl Structure {
     /// Creates a RustSASA [`Structure`] from a [`pdbtbx::PDB`].
     pub fn from_pdbtbx(
         pdbtbx_structure: &pdbtbx::PDB,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, FreesasaError> {
         let name = pdbtbx_structure
             .identifier
             .clone()
             .unwrap_or_else(|| "Unknown".to_string());
 
-        let mut fs_structure = Self::new_empty(Some(name.as_str()))?;
+        let mut fs_structure = Self::new(Some(name.as_str()))?;
 
         // Build the structure
         for chain in pdbtbx_structure.chains() {
@@ -278,7 +367,12 @@ impl Structure {
                         let cid = chain.id();
                         if cid.len() != 1 {
                             error!("Found {} as chain ID, it must be a single ASCII character!", chain.id());
-                            return Err("Chain IDs must be single characters! Check logs.");
+                            let err_msg = format!("Chain IDs must be single characters! Check logs. Found: {}", chain.id());
+                            return Err(FreesasaError::new(
+                                &err_msg,
+                                FreesasaErrorKind::Structure,
+                                None,
+                            ));
                         }
                         cid.chars().next().unwrap()
                     };
@@ -489,7 +583,7 @@ mod tests {
 
     #[test]
     fn new_empty() {
-        let hello = Structure::new_empty(Some("hello")).unwrap();
+        let hello = Structure::new(Some("hello")).unwrap();
         assert!(hello.get_name() == "hello");
     }
 
@@ -508,7 +602,7 @@ mod tests {
             ("ND2", "ASN", "1", 'A', 7.658, 8.070, 10.981),
         ];
 
-        let mut structure = Structure::new_empty(Some("test")).unwrap();
+        let mut structure = Structure::new(Some("test")).unwrap();
 
         for atom in atoms {
             structure
