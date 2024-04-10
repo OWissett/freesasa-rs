@@ -1,3 +1,5 @@
+use std::ffi::{OsStr, OsString};
+use std::str::FromStr;
 use std::{fmt, os::raw, ptr};
 
 use crate::classifier::DEFAULT_CLASSIFIER;
@@ -57,7 +59,7 @@ impl StructureOptions {
     /// * `halt_at_unknown` - Boolean regarding halting reading when unknown atom is encountered
     /// * `skip_unknown` - Boolean regarding skipping current atom when unknown atom is encountered
     /// * `radius_from_occupancy` - Boolean regarding reading atom radius from occupancy field
-    pub fn new(
+    fn new(
         include_hetatm: bool,
         include_hydrogen: bool,
         separate_models: bool,
@@ -111,6 +113,13 @@ impl Default for StructureOptions {
         }
     }
 }
+
+pub struct StructureBuilder {
+    name: String,
+    options: Option<StructureOptions>,
+}
+
+
 
 /// Simple Rust struct wrapper for freesasa_structure object.
 ///
@@ -181,11 +190,6 @@ impl Structure {
     /// For more details about the options field, read the FreeSASA C-API documentation for
     /// `freesasa_structure_from_pdb`
     ///
-    ///  ## Developers
-    ///
-    ///  This should probably be a internal function, with is wrapped,
-    ///  with something with explicit options, rather than a bitfield which isn't
-    ///  very Rusty.
     pub fn from_path(
         pdb_path: &str,
         options: Option<StructureOptions>,
