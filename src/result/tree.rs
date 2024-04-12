@@ -174,7 +174,7 @@ impl SasaTree {
     /// typically a comparison operator.
     ///
     /// ### Panics
-    /// - If the `node_filter` is a non-area node type, such as `NodeType::Root` or
+    /// - If the `node_filter` is a non-area node type, such as `NodeType::Root`
     pub fn predicate_trees<O, P>(
         &self,
         other: &Self,
